@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -c ' *)",
+      "Bash(py -c \"import sys; sys.path.insert\\(0,'.'\\); from agents.state import AgentState; print\\('OK state'\\); from tools.mock_data import DOUYIN_PLANS, DASHBOARD_METRICS; print\\(f'OK data: C001 roi={DOUYIN_PLANS[0][\\\\\"roi\\\\\"]}'\\); from tools.mock_functions import get_top_campaigns, update_bid; r=get_top_campaigns\\('douyin',7,'cost',5\\); print\\(f'OK funcs: {len\\(r\\)} plans'\\); from tools.tool_registry import ALL_TOOLS; print\\(f'OK tools: {len\\(ALL_TOOLS\\)}'\\); from api.sse_manager import SSEManager; print\\('OK sse'\\); from agents.supervisor import supervisor_node; print\\('OK supervisor'\\); from agents.data_agent import data_agent_node; print\\('OK data_agent'\\); from agents.analysis_agent import analysis_agent_node; print\\('OK analysis'\\); from agents.strategy_agent import strategy_agent_node; print\\('OK strategy'\\); from agents.execute_agent import execute_agent_node; print\\('OK execute'\\); from agents.report_agent import report_agent_node; print\\('OK report'\\); from agents.graph import app, _LANGGRAPH_AVAILABLE; print\\(f'OK graph \\(langgraph={\\\\\"available\\\\\" if _LANGGRAPH_AVAILABLE else \\\\\"not installed, using direct calls\\\\\"}\\)'\\); print\\('ALL OK'\\)\")",
+      "Bash(py -c \"import ast; ast.parse\\(open\\('ui/panels/chat_panel.py'\\).read\\(\\)\\); print\\('chat_panel OK'\\); ast.parse\\(open\\('ui/panels/trace_board.py'\\).read\\(\\)\\); print\\('trace_board OK'\\); ast.parse\\(open\\('ui/app.py'\\).read\\(\\)\\); print\\('app OK'\\)\")",
+      "Bash(py -c \"compile\\(open\\('ui/panels/chat_panel.py'\\).read\\(\\), 'chat_panel.py', 'exec'\\); print\\('OK'\\)\")",
+      "Bash(py -c \"compile\\(open\\('ui/app.py'\\).read\\(\\),'app','exec'\\);compile\\(open\\('ui/panels/trace_board.py'\\).read\\(\\),'tb','exec'\\);print\\('OK'\\)\")",
+      "Bash(py -m pip install certifi -q)",
+      "Bash(py -m pip install urllib3 charset_normalizer -q)"
+    ]
+  }
+}

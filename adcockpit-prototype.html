@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, initial-scale=1.0">
+<title>AdCockpit — AI 数字营销对话驾驶舱</title>
+<style>
+/* ====== Reset & Global ====== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-tertiary: #242836;
+  --border: #2a2e3a;
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0b0;
+  --text-muted: #5f6570;
+  --accent: #4c6ef5;
+  --accent-glow: rgba(76,110,245,0.25);
+  --success: #51cf66;
+  --warning: #fcc419;
+  --danger: #ff6b6b;
+  --info: #22b8cf;
+  --card-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+html, body {
+  height: 100%; width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* ====== Top Header Bar ====== */
+.topbar {
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px;
+  gap: 16px;
+}
+.topbar .logo {
+  font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
+  background: linear-gradient(135deg, var(--accent), #845ef7);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.topbar .badge {
+  font-size: 11px; padding: 2px 10px; border-radius: 10px;
+  background: rgba(76,110,245,0.15); color: var(--accent);
+}
+.topbar .meta { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.topbar .status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+  display: inline-block; margin-right: 6px; box-shadow: 0 0 6px var(--success);
+}
+
+/* ====== Three-Column Layout ====== */
+.main {
+  display: flex; height: calc(100vh - 48px);
+}
+.col { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+.col-header {
+  padding: 12px 16px; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.col-header .icon { font-size: 16px; }
+
+/* Left Panel — 25% */
+.col-left  { width: 25%; min-width: 320px; }
+/* Center Panel — 40% */
+.col-center { width: 40%; min-width: 480px; }
+/* Right Panel — 35% */
+.col-right { width: 35%; min-width: 400px; border-right: none; }
+
+/* ====== Left: Chat Panel ====== */
+.chat-body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.chat-msg {
+  display: flex; gap: 10px; animation: fadeIn 0.3s ease;
+}
+.chat-msg.user { flex-direction: row-reverse; }
+.chat-msg .avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600;
+}
+.chat-msg.agent .avatar { background: var(--accent); color: #fff; }
+.chat-msg.user  .avatar { background: var(--bg-tertiary); color: var(--text-secondary); }
+.chat-msg .bubble {
+  max-width: 80%; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.chat-msg.agent .bubble { background: var(--bg-tertiary); color: var(--text-primary); border-top-left-radius: 4px; }
+.chat-msg.user  .bubble { background: var(--accent); color: #fff; border-top-right-radius: 4px; }
+
+/* Approval card inside chat */
+.approval-card {
+  background: var(--bg-tertiary); border: 1px solid var(--warning);
+  border-radius: 10px; padding: 14px; margin: 4px 0;
+}
+.approval-card .ac-title { font-size: 13px; font-weight: 600; color: var(--warning); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.approval-card .ac-row { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.approval-card .ac-row:last-child { border-bottom: none; }
+.approval-card .ac-btns { display: flex; gap: 8px; margin-top: 12px; }
+.approval-card .ac-btns button { flex:1; padding: 8px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.btn-confirm { background: var(--success); color: #000; }
+.btn-confirm:hover { filter: brightness(1.15); }
+.btn-reject  { background: var(--bg-secondary); color: var(--danger); border: 1px solid var(--danger) !important; }
+.btn-reject:hover  { background: rgba(255,107,107,0.12); }
+
+.chat-input-area {
+  padding: 12px 16px; background: var(--bg-secondary);
+  border-top: 1px solid var(--border); display: flex; gap: 8px;
+  flex-shrink: 0;
+}
+.chat-input-area input {
+  flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-primary); color: var(--text-primary); font-size: 13px;
+  outline: none; transition: border 0.15s;
+}
+.chat-input-area input:focus { border-color: var(--accent); }
+.chat-input-area input::placeholder { color: var(--text-muted); }
+.chat-input-area button {
+  padding: 10px 18px; border-radius: 8px; border: none;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.chat-input-area button:hover { filter: brightness(1.1); }
+
+/* Scene quick buttons */
+.scene-tags {
+  display: flex; gap: 6px; padding: 8px 16px; flex-shrink: 0; overflow-x: auto;
+}
+.scene-tag {
+  font-size: 11px; padding: 4px 12px; border-radius: 14px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.scene-tag:hover, .scene-tag.active {
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(76,110,245,0.08);
+}
+
+/* ====== Center: Agent Trace Board ====== */
+.trace-body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* DAG summary bar */
+.dag-bar {
+  background: var(--bg-secondary); border-radius: 10px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.dag-bar .dag-node {
+  padding: 4px 10px; border-radius: 4px; font-weight: 500; font-size: 11px;
+}
+.dag-node.supervisor { background: rgba(76,110,245,0.2); color: var(--accent); }
+.dag-node.data      { background: rgba(34,184,207,0.2); color: var(--info); }
+.dag-node.analysis  { background: rgba(252,196,25,0.2); color: var(--warning); }
+.dag-node.strategy  { background: rgba(132,94,247,0.2); color: #845ef7; }
+.dag-node.execute   { background: rgba(81,207,102,0.2); color: var(--success); }
+.dag-node.report    { background: rgba(255,107,107,0.2); color: var(--danger); }
+.dag-arrow { color: var(--text-muted); margin: 0 2px; }
+
+/* Agent step card */
+.step-card {
+  background: var(--bg-secondary); border-radius: 10px;
+  border-left: 3px solid var(--border); padding: 14px 16px;
+  display: flex; gap: 12px; transition: all 0.3s;
+  animation: slideIn 0.35s ease;
+}
+.step-card.status-done    { border-left-color: var(--success); }
+.step-card.status-running { border-left-color: var(--accent); }
+.step-card.status-waiting { border-left-color: var(--warning); }
+.step-card.status-failed  { border-left-color: var(--danger); }
+.step-card.status-pending { border-left-color: var(--border); opacity: 0.6; }
+
+.step-icon {
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.step-icon.done    { background: rgba(81,207,102,0.15); }
+.step-icon.running { background: rgba(76,110,245,0.15); }
+.step-icon.waiting { background: rgba(252,196,25,0.15); }
+.step-icon.failed  { background: rgba(255,107,107,0.15); }
+.step-icon.pending { background: var(--bg-tertiary); }
+.step-icon .spin { animation: spin 1s linear infinite; }
+
+.step-body { flex:1; }
+.step-body .step-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.step-body .step-title .time { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: auto; }
+.step-body .step-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+/* Expandable tool call detail */
+.tool-call {
+  margin-top: 8px; background: var(--bg-primary); border-radius: 6px;
+  overflow: hidden; font-size: 11px;
+}
+.tool-call-header {
+  padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  color: var(--text-muted); user-select: none;
+}
+.tool-call-header:hover { color: var(--text-secondary); }
+.tool-call-body {
+  padding: 8px 10px; display: none; border-top: 1px solid var(--border);
+}
+.tool-call.open .tool-call-body { display: block; }
+.tool-call pre {
+  font-family: 'SF Mono','Fira Code',monospace; font-size: 10.5px;
+  margin: 4px 0; padding: 6px 8px; background: #0a0c12;
+  border-radius: 4px; overflow-x: auto; color: #a5d6ff;
+  max-height: 160px; overflow-y: auto;
+}
+
+/* Retry button */
+.retry-btn {
+  margin-top: 6px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: 11px; cursor: pointer;
+}
+.retry-btn:hover { background: rgba(76,110,245,0.1); }
+
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slideIn { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
+
+/* ====== Right: Insight Dashboard ====== */
+.dash-body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+/* Metric cards row */
+.metrics-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.metric-card {
+  background: var(--bg-secondary); border-radius: 10px; padding: 14px;
+  border: 1px solid var(--border);
+}
+.metric-card .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.metric-card .metric-value { font-size: 24px; font-weight: 700; }
+.metric-card .metric-sub { font-size: 11px; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.metric-sub.up   { color: var(--success); }
+.metric-sub.down { color: var(--danger); }
+.metric-sub.warn { color: var(--warning); }
+.metric-hl { border-color: var(--danger); background: rgba(255,107,107,0.06); }
+.metric-hl .metric-value { color: var(--danger); }
+
+/* Chart placeholder */
+.chart-card {
+  background: var(--bg-secondary); border-radius: 10px;
+  border: 1px solid var(--border); padding: 16px;
+}
+.chart-card .chart-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 600; }
+.chart-placeholder {
+  display: flex; align-items: flex-end; gap: 8px; height: 140px;
+  padding-bottom: 24px; position: relative;
+}
+.chart-placeholder::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 1px; background: var(--border);
+}
+.chart-bar {
+  flex: 1; border-radius: 4px 4px 0 0; position: relative;
+  background: linear-gradient(180deg, var(--accent), rgba(76,110,245,0.3));
+  transition: height 0.5s ease; min-width: 28px;
+}
+.chart-bar.low  { background: linear-gradient(180deg, var(--danger), rgba(255,107,107,0.3)); }
+.chart-bar.mid  { background: linear-gradient(180deg, var(--warning), rgba(252,196,25,0.3)); }
+.chart-bar .bar-label {
+  position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; color: var(--text-muted); white-space: nowrap;
+}
+.chart-bar .bar-val {
+  position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; font-weight: 600; color: var(--text-primary);
+}
+
+/* Anomaly alerts */
+.alert-list { display: flex; flex-direction: column; gap: 8px; }
+.alert-item {
+  background: var(--bg-secondary); border-radius: 8px;
+  padding: 12px; display: flex; align-items: center; gap: 10px;
+  border-left: 3px solid var(--danger);
+}
+.alert-item.warn { border-left-color: var(--warning); }
+.alert-item .alert-icon { font-size: 18px; flex-shrink: 0; }
+.alert-item .alert-info { flex: 1; }
+.alert-item .alert-info .alert-title { font-size: 12px; font-weight: 600; }
+.alert-item .alert-info .alert-detail { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* Report summary */
+.report-summary {
+  background: var(--bg-secondary); border-radius: 10px;
+  border: 1px solid var(--border); padding: 16px;
+}
+.report-summary .rs-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.report-summary .rs-row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; color: var(--text-secondary); }
+.report-summary .rs-row .val { color: var(--text-primary); font-weight: 500; }
+.report-summary .copy-btn {
+  margin-top: 10px; padding: 6px 14px; border-radius: 6px;
+  border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font-size: 11px; cursor: pointer; width: 100%;
+}
+.report-summary .copy-btn:hover { background: rgba(76,110,245,0.08); }
+
+/* ====== Scrollbar ====== */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<!-- ====== Top Bar ====== -->
+<div class="topbar">
+  <span class="logo">⚡ AdCockpit</span>
+  <span class="badge">Demo v1.0</span>
+  <span style="font-size:12px;color:var(--text-secondary);">数字营销 AI 对话驾驶舱</span>
+  <span class="meta">
+    <span class="status-dot"></span>系统正常
+    &nbsp;|&nbsp; 场景: <strong>投放优化</strong>
+    &nbsp;|&nbsp; Session: demo-2026-0609
+  </span>
+</div>
+
+<!-- ====== Main Layout ====== -->
+<div class="main">
+
+<!-- ====== LEFT: Chat Panel ====== -->
+<div class="col col-left">
+  <div class="col-header"><span class="icon">💬</span> 对话面板 — Chat Panel</div>
+
+  <!-- Scene quick tags -->
+  <div class="scene-tags">
+    <span class="scene-tag active">📊 投放优化</span>
+    <span class="scene-tag">🎬 内容生产</span>
+    <span class="scene-tag">🛒 电商场控</span>
+    <span class="scene-tag">📈 数据分析</span>
+    <span class="scene-tag">🔧 故障诊断</span>
+  </div>
+
+  <!-- Chat messages -->
+  <div class="chat-body" id="chatBody">
+    <!-- Agent welcome -->
+    <div class="chat-msg agent">
+      <div class="avatar">AI</div>
+      <div class="bubble">👋 你好，我是 AdCockpit AI 优化师。我可以帮你：
+• 跨平台广告投放分析与自动优化
+• 投后素材分析 & AI 内容生产
+• 直播间实时场控与电商闭环
+• 多平台数据聚合与预算建议
+• 全链路故障诊断与自动恢复
+
+请描述你的需求，或点击下方场景标签快速开始。</div>
+    </div>
+
+    <!-- User message 1 -->
+    <div class="chat-msg user">
+      <div class="avatar">王</div>
+      <div class="bubble">帮我检查一下最近 7 天在抖音和腾讯广告上，消耗排名 Top 5 的计划里哪些 ROI 低于 2，对不达标的计划自动降价 10%，然后生成一份今日优化报告。</div>
+    </div>
+
+    <!-- Agent response 1 -->
+    <div class="chat-msg agent">
+      <div class="avatar">AI</div>
+      <div class="bubble">收到，我来拆解这个任务：
+
+📋 **任务分解**（6 个子任务）：
+1. 拉取抖音 Top 5 消耗计划
+2. 拉取腾讯广告 Top 5 消耗计划
+3. 合并数据，筛选 ROI &lt; 2 的计划
+4. 对不达标计划生成降价策略
+5. 等待你确认后执行调价
+6. 生成今日优化报告
+
+正在并行拉取两个平台数据…</div>
+    </div>
+
+    <!-- Agent response 2 -->
+    <div class="chat-msg agent">
+      <div class="avatar">AI</div>
+      <div class="bubble">✅ 数据拉取完成。在 10 条计划中发现 <strong>3 条 ROI 低于 2.0</strong>：
+
+• 计划 A（抖音）：消耗 ¥15,200，ROI <span style="color:#ff6b6b">1.5</span>
+• 计划 B（腾讯）：消耗 ¥12,800，ROI <span style="color:#ff6b6b">1.2</span>
+• 计划 C（抖音）：消耗 ¥9,600，ROI <span style="color:#ff6b6b">1.8</span>
+
+策略已生成，请查看下方确认卡片 👇</div>
+    </div>
+
+    <!-- Approval Card -->
+    <div class="chat-msg agent">
+      <div class="avatar">AI</div>
+      <div class="bubble" style="background:transparent;padding:0;">
+        <div class="approval-card" id="approvalCard">
+          <div class="ac-title">🛑 待确认 — 调价策略</div>
+          <div class="ac-row"><span>计划 A（抖音）</span><span>降价 10%（¥25 → ¥22.5）</span><span style="color:var(--warning)">中风险</span></div>
+          <div class="ac-row"><span>计划 B（腾讯）</span><span>降价 10%（¥30 → ¥27）</span><span style="color:var(--warning)">中风险</span></div>
+          <div class="ac-row"><span>计划 B（腾讯）</span><span>降预算 20%（¥5000 → ¥4000）</span><span style="color:var(--danger)">高风险</span></div>
+          <div class="ac-row"><span>计划 C（抖音）</span><span>降价 10%（¥20 → ¥18）</span><span style="color:var(--success)">低风险</span></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">预计节省消耗 <strong style="color:var(--success)">15%</strong>，ROI 预计提升至 <strong style="color:var(--success)">2.1</strong></div>
+          <div class="ac-btns">
+            <button class="btn-confirm" onclick="confirmApproval()">✅ 确认执行</button>
+            <button class="btn-reject" onclick="rejectApproval()">✕ 取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat input -->
+  <div class="chat-input-area">
+    <input type="text" id="chatInput" placeholder="输入优化指令，例如：检查 ROI 不达标的计划并自动调价…" onkeydown="if(event.key==='Enter') sendMessage()">
+    <button onclick="sendMessage()">发送 ➤</button>
+  </div>
+</div>
+
+<!-- ====== CENTER: Agent Trace Board ====== -->
+<div class="col col-center">
+  <div class="col-header"><span class="icon">🔗</span> Agent 编排与执行追踪 — Trace Board</div>
+
+  <div class="trace-body" id="traceBody">
+    <!-- DAG task summary -->
+    <div class="dag-bar">
+      <span style="font-weight:600;">任务图:</span>
+      <span class="dag-node supervisor">🧠 Supervisor</span>
+      <span class="dag-arrow">→</span>
+      <span class="dag-node data">📡 Data</span>
+      <span class="dag-arrow">⇉</span>
+      <span class="dag-node data">📡 Data</span>
+      <span class="dag-arrow">→</span>
+      <span class="dag-node analysis">🔍 Analysis</span>
+      <span class="dag-arrow">→</span>
+      <span class="dag-node strategy">🎯 Strategy</span>
+      <span class="dag-arrow">→</span>
+      <span class="dag-node execute">⚡ Execute</span>
+      <span class="dag-arrow">→</span>
+      <span class="dag-node report">📋 Report</span>
+    </div>
+
+    <!-- Step 1: Supervisor -->
+    <div class="step-card status-done">
+      <div class="step-icon done">✅</div>
+      <div class="step-body">
+        <div class="step-title">Supervisor Agent — 任务规划<span class="time">0.8s</span></div>
+        <div class="step-desc">识别意图：跨平台投放优化 → 拆解为 6 个子任务，路由至 Data Agent (并行) → Analysis → Strategy → Execute (需确认) → Report</div>
+        <div class="tool-call" onclick="this.classList.toggle('open')">
+          <div class="tool-call-header">📋 展开输出 ▸</div>
+          <div class="tool-call-body">
+            <pre>{
+  "scene": "ad_placement",
+  "tasks": [
+    {"id":"T1","type":"fetch_data","platform":"douyin","params":{"metric":"cost","top_n":5,"days":7}},
+    {"id":"T2","type":"fetch_data","platform":"tencent","params":{"metric":"cost","top_n":5,"days":7}},
+    {"id":"T3","type":"analyze","depends_on":["T1","T2"],"params":{"filter":"roi < 2"}},
+    {"id":"T4","type":"strategize","depends_on":["T3"],"params":{"action":"update_bid","adjustment":-0.1}},
+    {"id":"T5","type":"execute","depends_on":["T4"],"params":{"requires_approval":true}},
+    {"id":"T6","type":"report","depends_on":["T5"]}
+  ],
+  "execution_mode": "parallel(T1,T2) → sequential(T3→T4→T5→T6)"
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Data Agent — Douyin -->
+    <div class="step-card status-done">
+      <div class="step-icon done">✅</div>
+      <div class="step-body">
+        <div class="step-title">Data Agent — 抖音 · get_top_campaigns<span class="time">2.1s</span></div>
+        <div class="step-desc">拉取抖音平台近 7 天消耗 Top 5 计划，返回 5 条结果</div>
+        <div class="tool-call" onclick="this.classList.toggle('open')">
+          <div class="tool-call-header">📡 get_top_campaigns(platform="douyin", days=7, metric="cost", top_n=5) ▸</div>
+          <div class="tool-call-body">
+            <pre style="color:#a5d6ff;">→ Request:  {"platform":"douyin","days":7,"metric":"cost","top_n":5}
+← Response (200): [
+  {"id":"C001","name":"夏季促销-A","cost":15200,"roi":1.5,"status":"active","bid":25.0},
+  {"id":"C002","name":"新品首发-B","cost":14100,"roi":2.3,"status":"active","bid":30.0},
+  {"id":"C003","name":"爆款返场-C","cost":12800,"roi":3.1,"status":"active","bid":22.0},
+  {"id":"C004","name":"品牌日-D","cost":9600, "roi":1.8,"status":"active","bid":20.0},
+  {"id":"C005","name":"直播引流-E","cost":8800, "roi":2.5,"status":"active","bid":18.0}
+]</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Data Agent — Tencent -->
+    <div class="step-card status-done">
+      <div class="step-icon done">✅</div>
+      <div class="step-body">
+        <div class="step-title">Data Agent — 腾讯广告 · get_top_campaigns<span class="time">2.4s</span></div>
+        <div class="step-desc">拉取腾讯广告平台近 7 天消耗 Top 5 计划，返回 5 条结果</div>
+        <div class="tool-call" onclick="this.classList.toggle('open')">
+          <div class="tool-call-header">📡 get_top_campaigns(platform="tencent", days=7, metric="cost", top_n=5) ▸</div>
+          <div class="tool-call-body">
+            <pre style="color:#a5d6ff;">→ Request:  {"platform":"tencent","days":7,"metric":"cost","top_n":5}
+← Response (200): [
+  {"id":"T001","name":"618大促","cost":12800,"roi":1.2,"status":"active","bid":30.0},
+  {"id":"T002","name":"会员日","cost":11000,"roi":2.8,"status":"active","bid":28.0},
+  {"id":"T003","name":"达人种草","cost":9500,"roi":3.5,"status":"active","bid":24.0},
+  {"id":"T004","name":"品宣视频","cost":8200,"roi":2.1,"status":"active","bid":21.0},
+  {"id":"T005","name":"直播切片","cost":7600,"roi":2.6,"status":"active","bid":19.0}
+]</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Analysis Agent -->
+    <div class="step-card status-done">
+      <div class="step-icon done">✅</div>
+      <div class="step-body">
+        <div class="step-title">Analysis Agent — 数据筛选与诊断<span class="time">1.3s</span></div>
+        <div class="step-desc">合并 10 条计划数据，筛选 ROI &lt; 2.0：发现 3 条不达标计划（C001: 1.5, T001: 1.2, C004: 1.8）</div>
+        <div class="tool-call" onclick="this.classList.toggle('open')">
+          <div class="tool-call-header">🔍 分析详情 ▸</div>
+          <div class="tool-call-body">
+            <pre>{
+  "total_analyzed": 10,
+  "anomalies": [
+    {"plan_id":"C001","platform":"douyin","cost":15200,"roi":1.5,"severity":"high","trend":"declining"},
+    {"plan_id":"T001","platform":"tencent","cost":12800,"roi":1.2,"severity":"critical","trend":"declining"},
+    {"plan_id":"C004","platform":"douyin","cost":9600,"roi":1.8,"severity":"medium","trend":"flat"}
+  ],
+  "summary": "3/10 计划 ROI 低于目标值 2.0，总不达标消耗占比 37.6%"
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Strategy Agent -->
+    <div class="step-card status-done">
+      <div class="step-icon done">✅</div>
+      <div class="step-body">
+        <div class="step-title">Strategy Agent — 策略生成<span class="time">0.9s</span></div>
+        <div class="step-desc">生成 4 条策略动作：降价 10%（3 条）+ 降预算 20%（1 条），综合风险评估：中等</div>
+        <div class="tool-call" onclick="this.classList.toggle('open')">
+          <div class="tool-call-header">🎯 策略详情 ▸</div>
+          <div class="tool-call-body">
+            <pre>{
+  "actions": [
+    {"target":"C001","action":"update_bid","params":{"new_bid":22.5},"risk":"medium","expected":"ROI→1.9"},
+    {"target":"T001","action":"update_bid","params":{"new_bid":27.0},"risk":"medium","expected":"ROI→1.6"},
+    {"target":"T001","action":"update_budget","params":{"new_budget":4000},"risk":"high","expected":"止损"},
+    {"target":"C004","action":"update_bid","params":{"new_bid":18.0},"risk":"low","expected":"ROI→2.1"}
+  ],
+  "estimated_saving": "15%",
+  "estimated_roi_improvement": "2.1 (aggregate)"
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6: Approval pending -->
+    <div class="step-card status-waiting" id="stepApproval">
+      <div class="step-icon waiting">⏸️</div>
+      <div class="step-body">
+        <div class="step-title">Execute Agent — 等待人工审批<span class="time" id="approvalTimer">待确认</span></div>
+        <div class="step-desc">🛑 策略包含 2 条中风险 + 1 条高风险动作，已触发 Human-in-the-loop 中断。<br>请在左侧对话面板确认或取消操作。</div>
+      </div>
+    </div>
+
+    <!-- Step 7: Report Agent (pending) -->
+    <div class="step-card status-pending" id="stepReport">
+      <div class="step-icon pending">⏳</div>
+      <div class="step-body">
+        <div class="step-title">Report Agent — 等待上游完成<span class="time">—</span></div>
+        <div class="step-desc">将在执行完成后自动生成优化报告摘要</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== RIGHT: Insight Dashboard ====== -->
+<div class="col col-right">
+  <div class="col-header"><span class="icon">📊</span> 数据洞察仪表盘 — Insight Dashboard &nbsp;<span style="font-size:10px;color:var(--text-muted)">投放模式</span></div>
+
+  <div class="dash-body">
+    <!-- Key Metrics -->
+    <div class="metrics-row">
+      <div class="metric-card metric-hl">
+        <div class="metric-label">⚠️ 整体 ROI</div>
+        <div class="metric-value">1.87</div>
+        <div class="metric-sub down">▼ 0.23 vs 昨日</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">💰 总消耗 (今日)</div>
+        <div class="metric-value">¥37,600</div>
+        <div class="metric-sub up">▲ 8.5% vs 昨日</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">🎯 平均 CPA</div>
+        <div class="metric-value">¥38.5</div>
+        <div class="metric-sub warn">≈ 持平</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">📋 活跃计划</div>
+        <div class="metric-value">10</div>
+        <div class="metric-sub up">3 条需关注</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">👆 平均 CTR (点击率)</div>
+        <div class="metric-value">3.8<small style="font-size:14px;font-weight:400">%</small></div>
+        <div class="metric-sub up">▲ 0.4% vs 昨日</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">🔄 平均 CVR (转化率)</div>
+        <div class="metric-value">4.2<small style="font-size:14px;font-weight:400">%</small></div>
+        <div class="metric-sub down">▼ 0.3% vs 昨日</div>
+      </div>
+    </div>
+
+    <!-- ROI Bar Chart placeholder -->
+    <div class="chart-card">
+      <div class="chart-title">📊 各计划 ROI 对比（红色 = 低于 2.0 阈值）</div>
+      <div class="chart-placeholder" id="roiChart">
+        <!-- Filled by JS -->
+      </div>
+    </div>
+
+    <!-- Anomaly Alerts -->
+    <div class="alert-list">
+      <div class="alert-item">
+        <span class="alert-icon">🔴</span>
+        <div class="alert-info">
+          <div class="alert-title">计划 T001 — ROI 严重偏低</div>
+          <div class="alert-detail">腾讯广告 · 消耗 ¥12,800 · ROI 1.2 · 建议：降价 + 降预算</div>
+        </div>
+      </div>
+      <div class="alert-item">
+        <span class="alert-icon">🟠</span>
+        <div class="alert-info">
+          <div class="alert-title">计划 C001 — ROI 持续下滑</div>
+          <div class="alert-detail">抖音 · 消耗 ¥15,200 · ROI 1.5 · 趋势：近 3 天下跌 0.4</div>
+        </div>
+      </div>
+      <div class="alert-item warn">
+        <span class="alert-icon">🟡</span>
+        <div class="alert-info">
+          <div class="alert-title">计划 C004 — ROI 略低于阈值</div>
+          <div class="alert-detail">抖音 · 消耗 ¥9,600 · ROI 1.8 · 趋势：持平</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report Summary -->
+    <div class="report-summary">
+      <div class="rs-title">📋 优化报告预览</div>
+      <div class="rs-row"><span>分析计划数</span><span class="val">10 条（抖音 5 + 腾讯 5）</span></div>
+      <div class="rs-row"><span>不达标计划</span><span class="val" style="color:var(--danger)">3 条（ROI < 2.0）</span></div>
+      <div class="rs-row"><span>建议调价</span><span class="val">3 条计划降价 10%</span></div>
+      <div class="rs-row"><span>建议降预算</span><span class="val">1 条计划降 20%</span></div>
+      <div class="rs-row"><span>预计节省消耗</span><span class="val" style="color:var(--success)">¥5,640/天（15%）</span></div>
+      <div class="rs-row"><span>预计 ROI 提升</span><span class="val" style="color:var(--success)">1.87 → 2.1（+12.3%）</span></div>
+      <button class="copy-btn" onclick="copyReport()">📋 一键复制报告</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+/* ====== ROI Bar Chart ====== */
+(function drawChart() {
+  var plans = [
+    {label:'C001', roi:1.5, cls:'low'},
+    {label:'C002', roi:2.3, cls:''},
+    {label:'C003', roi:3.1, cls:''},
+    {label:'C004', roi:1.8, cls:'low'},
+    {label:'C005', roi:2.5, cls:''},
+    {label:'T001', roi:1.2, cls:'low'},
+    {label:'T002', roi:2.8, cls:''},
+    {label:'T003', roi:3.5, cls:''},
+    {label:'T004', roi:2.1, cls:''},
+    {label:'T005', roi:2.6, cls:''}
+  ];
+  var maxROI = 4.0;
+  var container = document.getElementById('roiChart');
+  container.innerHTML = '';
+  plans.forEach(function(p) {
+    var height = Math.max(8, (p.roi / maxROI) * 110);
+    var bar = document.createElement('div');
+    bar.className = 'chart-bar' + (p.cls ? ' '+p.cls : '');
+    bar.style.height = height + 'px';
+    bar.innerHTML = '<span class="bar-val">'+p.roi.toFixed(1)+'</span><span class="bar-label">'+p.label+'</span>';
+    container.appendChild(bar);
+  });
+  // Threshold line
+  var line = document.createElement('div');
+  line.style.cssText = 'position:absolute;bottom:'+(2.0/maxROI*110+24)+'px;left:0;right:0;border-top:1px dashed var(--danger);z-index:5;';
+  line.title = 'ROI=2.0 阈值';
+  container.style.position = 'relative';
+  container.appendChild(line);
+})();
+
+/* ====== Chat: Send Message ====== */
+function sendMessage() {
+  var input = document.getElementById('chatInput');
+  var text = input.value.trim();
+  if (!text) return;
+  var body = document.getElementById('chatBody');
+  var msg = document.createElement('div');
+  msg.className = 'chat-msg user';
+  msg.innerHTML = '<div class="avatar">王</div><div class="bubble">'+escapeHtml(text)+'</div>';
+  body.appendChild(msg);
+  input.value = '';
+  body.scrollTop = body.scrollHeight;
+
+  // Simulate agent reply after a short delay
+  setTimeout(function() {
+    var reply = document.createElement('div');
+    reply.className = 'chat-msg agent';
+    reply.innerHTML = '<div class="avatar">AI</div><div class="bubble">🤖 收到「<strong>'+escapeHtml(text)+'</strong>」，正在分析中…<br><br>这是一条模拟回复。在完整实现中，这里会触发 LangGraph Agent 编排流程并在中间面板实时展示执行步骤。</div>';
+    body.appendChild(reply);
+    body.scrollTop = body.scrollHeight;
+  }, 800);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ====== Approval Flow ====== */
+function confirmApproval() {
+  // Update approval card
+  var card = document.getElementById('approvalCard');
+  card.innerHTML = '<div class="ac-title" style="color:var(--success);">✅ 已确认 — 执行中…</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);">正在对 3 条计划执行调价操作…</div>';
+  card.style.borderColor = 'var(--success)';
+
+  // Update step 6 in trace
+  var step6 = document.getElementById('stepApproval');
+  step6.className = 'step-card status-running';
+  step6.querySelector('.step-icon').innerHTML = '<span class="spin">🔄</span>';
+  step6.querySelector('.step-icon').className = 'step-icon running';
+  step6.querySelector('.step-title').innerHTML = 'Execute Agent — 执行调价中<span class="time">进行中…</span>';
+  step6.querySelector('.step-desc').innerHTML = '✅ 审批通过。正在并行执行：update_bid(C001, 22.5), update_bid(T001, 27.0), update_budget(T001, 4000), update_bid(C004, 18.0)';
+
+  document.getElementById('approvalTimer').textContent = '执行中';
+
+  // After 2s, mark as done and update report step
+  setTimeout(function() {
+    step6.className = 'step-card status-done';
+    step6.querySelector('.step-icon').innerHTML = '✅';
+    step6.querySelector('.step-icon').className = 'step-icon done';
+    step6.querySelector('.step-title').innerHTML = 'Execute Agent — 执行完成<span class="time">3.2s</span>';
+    step6.querySelector('.step-desc').innerHTML = '✅ 4 条操作全部成功：3 条降价 + 1 条降预算。无异常。';
+
+    // Activate report step
+    var stepR = document.getElementById('stepReport');
+    stepR.className = 'step-card status-running';
+    stepR.querySelector('.step-icon').innerHTML = '<span class="spin">🔄</span>';
+    stepR.querySelector('.step-icon').className = 'step-icon running';
+    stepR.querySelector('.step-title').innerHTML = 'Report Agent — 生成报告中<span class="time">进行中…</span>';
+    stepR.querySelector('.step-desc').innerHTML = '聚合执行结果，生成今日优化报告摘要…';
+
+    // After another 1.5s, mark report as done
+    setTimeout(function() {
+      stepR.className = 'step-card status-done';
+      stepR.querySelector('.step-icon').innerHTML = '✅';
+      stepR.querySelector('.step-icon').className = 'step-icon done';
+      stepR.querySelector('.step-title').innerHTML = 'Report Agent — 报告就绪<span class="time">1.1s</span>';
+      stepR.querySelector('.step-desc').innerHTML = '✅ 优化报告已生成：预计节省消耗 15%，ROI 预计提升至 2.1。可在右侧仪表盘查看详情。';
+
+      // Add final message to chat
+      var body = document.getElementById('chatBody');
+      var final = document.createElement('div');
+      final.className = 'chat-msg agent';
+      final.innerHTML = '<div class="avatar">AI</div><div class="bubble">✅ <strong>全部操作完成！</strong><br><br>📊 执行摘要：<br>• 调价 3 条计划（降价 10%）<br>• 降预算 1 条（-20%）<br>• 预计节省消耗 <strong style="color:var(--success)">¥5,640/天</strong><br>• 预计 ROI <strong style="color:var(--success)">1.87 → 2.1</strong><br><br>📋 报告已生成，可在右侧仪表盘查看和复制。</div>';
+      body.appendChild(final);
+      body.scrollTop = body.scrollHeight;
+
+      // Update approval card
+      card.innerHTML = '<div class="ac-title" style="color:var(--success);">✅ 执行完成</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);">4/4 操作成功，报告已生成</div>';
+    }, 1500);
+  }, 2000);
+}
+
+function rejectApproval() {
+  var card = document.getElementById('approvalCard');
+  card.innerHTML = '<div class="ac-title" style="color:var(--danger);">✕ 已取消</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);">所有调价操作已取消，计划保持原状。</div>';
+  card.style.borderColor = 'var(--danger)';
+
+  var step6 = document.getElementById('stepApproval');
+  step6.className = 'step-card status-failed';
+  step6.querySelector('.step-icon').innerHTML = '✕';
+  step6.querySelector('.step-icon').className = 'step-icon failed';
+  step6.querySelector('.step-title').innerHTML = 'Execute Agent — 用户取消<span class="time">已终止</span>';
+  step6.querySelector('.step-desc').innerHTML = '用户拒绝了调价策略，所有操作已回滚。';
+
+  var body = document.getElementById('chatBody');
+  var cancel = document.createElement('div');
+  cancel.className = 'chat-msg agent';
+  cancel.innerHTML = '<div class="avatar">AI</div><div class="bubble">操作已取消。如需手动调整或有其他需求，请随时告诉我。</div>';
+  body.appendChild(cancel);
+  body.scrollTop = body.scrollHeight;
+}
+
+/* ====== Copy Report ====== */
+function copyReport() {
+  var text = 'AdCockpit 今日优化报告\n' +
+    '━━━━━━━━━━━━━━━━━\n' +
+    '分析计划数：10 条（抖音 5 + 腾讯 5）\n' +
+    '不达标计划：3 条（ROI < 2.0）\n' +
+    '  - C001（抖音）：ROI 1.5，建议降价 10%\n' +
+    '  - T001（腾讯）：ROI 1.2，建议降价 10% + 降预算 20%\n' +
+    '  - C004（抖音）：ROI 1.8，建议降价 10%\n' +
+    '预计节省消耗：¥5,640/天（15%）\n' +
+    '预计 ROI 提升：1.87 → 2.1（+12.3%）';
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ 已复制！';
+    setTimeout(function() { btn.textContent = '📋 一键复制报告'; }, 2000);
+  }).catch(function() {
+    alert('复制失败，请手动选择文本复制');
+  });
+}
+
+/* ====== Scene tag switching ====== */
+document.querySelectorAll('.scene-tag').forEach(function(tag) {
+  tag.addEventListener('click', function() {
+    document.querySelectorAll('.scene-tag').forEach(function(t) { t.classList.remove('active'); });
+    this.classList.add('active');
+    var input = document.getElementById('chatInput');
+    var placeholders = {
+      '投放优化': '检查最近 7 天 ROI 不达标的计划并自动调价…',
+      '内容生产': '分析昨日高点击视频共性，生成新的带货脚本…',
+      '电商场控': '检查直播间商品库存，自动补货并发优惠券…',
+      '数据分析': '拉取本月所有平台消耗数据，按客户汇总排名…',
+      '故障诊断': '帮我排查计划为什么没量，自动恢复…'
+    };
+    input.placeholder = placeholders[this.textContent.trim().replace(/^.[^ ]+ /,'')] || '输入你的指令…';
+  });
+});
+</script>
+
+</body>
+</html>
