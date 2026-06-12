@@ -63,11 +63,11 @@ def _maybe_fail():
         raise MockBusinessError("业务处理异常，请检查参数后重试")
 
 def _find_plan(platform: str, plan_id: str) -> Optional[Dict]:
-    """Find a plan by platform and ID."""
+    """Find a plan by platform and ID. Returns ORIGINAL reference so modifications persist."""
     plans = DOUYIN_PLANS if platform == "douyin" else TENCENT_PLANS
     for p in plans:
         if p["id"] == plan_id:
-            return dict(p)
+            return p  # Return original, NOT copy — so update_bid/update_budget take effect
     return None
 
 # ---------------------------------------------------------------------------
@@ -153,6 +153,7 @@ def update_bid(platform: str, campaign_id: str, new_bid: float) -> Dict[str, Any
     if random.random() < 0.05:
         raise AccountInsufficientBalance("账户余额不足，无法调整出价")
 
+    plan["bid"] = new_bid
     return {"success": True, "campaign_id": campaign_id, "new_bid": new_bid}
 
 
@@ -179,6 +180,7 @@ def update_budget(platform: str, campaign_id: str, new_budget: float) -> Dict[st
     if new_budget < 500:
         raise BudgetBelowMinimum(f"预算 {new_budget} 低于最低限额 500 元")
 
+    plan["budget"] = new_budget
     return {"success": True, "campaign_id": campaign_id, "new_budget": new_budget}
 
 

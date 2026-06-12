@@ -107,13 +107,13 @@ def _create_document_real(token: str, title: str, content: str, folder_token: st
     doc_id = data["data"]["document"]["document_id"]
     doc_url = f"https://bytedance.feishu.cn/docx/{doc_id}"
 
-    # Add content
+    # Add content via children endpoint
     try:
         blocks = _text_to_blocks(content)
         requests.post(
-            f"{BASE_URL}/docx/v1/documents/{doc_id}/blocks/batch_create",
+            f"{BASE_URL}/docx/v1/documents/{doc_id}/blocks/{doc_id}/children",
             headers=headers,
-            json={"document_id": doc_id, "blocks": blocks},
+            json={"children": blocks},
             timeout=15,
         )
     except Exception:
@@ -152,44 +152,37 @@ def _create_document_mock(title: str, content: str, note: str = "") -> Dict[str,
 
 
 def _text_to_blocks(text: str) -> List[Dict]:
-    """Convert plain text with markdown-ish formatting to Feishu doc blocks."""
+    """Convert plain text to Feishu docx blocks.
+
+    Supported block types: 2=text, 3=heading1, 4=heading2.
+    Bullet points are rendered as indented text (block_type for bullet varies by API version).
+    """
     blocks = []
     for line in text.split("\n"):
-        line = line.strip()
-        if not line:
+        stripped = line.strip()
+        if not stripped:
             continue
 
-        if line.startswith("## "):
+        if stripped.startswith("## "):
             blocks.append({
-                "block_type": 3,  # heading2
-                "heading2": {
-                    "elements": [{"text_run": {"content": line[3:]}}],
-                    "style": {},
-                }
+                "block_type": 4,
+                "heading2": {"elements": [{"text_run": {"content": stripped[3:]}}]}
             })
-        elif line.startswith("# "):
+        elif stripped.startswith("# "):
             blocks.append({
-                "block_type": 2,  # heading1
-                "heading1": {
-                    "elements": [{"text_run": {"content": line[2:]}}],
-                    "style": {},
-                }
+                "block_type": 3,
+                "heading1": {"elements": [{"text_run": {"content": stripped[2:]}}]}
             })
-        elif line.startswith("- ") or line.startswith("• "):
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            # Bullet: use text block with bullet prefix (reliable across API versions)
             blocks.append({
-                "block_type": 5,  # bullet
-                "bullet": {
-                    "elements": [{"text_run": {"content": line[2:]}}],
-                    "style": {},
-                }
+                "block_type": 2,
+                "text": {"elements": [{"text_run": {"content": f"  • {stripped[2:]}"}}]}
             })
         else:
             blocks.append({
-                "block_type": 4,  # text
-                "text": {
-                    "elements": [{"text_run": {"content": line}}],
-                    "style": {},
-                }
+                "block_type": 2,
+                "text": {"elements": [{"text_run": {"content": stripped}}]}
             })
     return blocks
 

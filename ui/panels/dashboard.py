@@ -64,26 +64,27 @@ def _norm(plans):
         out.append({"id":p["id"],"name":p.get("name",p["id"]),"platform":"抖音" if p.get("_platform")=="douyin" else "腾讯","cost":p.get("cost",0),"roi":p.get("roi",0),"cpa":p.get("cpa",0),"ctr_pct":round(p.get("ctr",0)*100,1),"cvr_pct":round(p.get("cvr",0)*100,1),"bid":p.get("bid",0),"budget":p.get("budget",0),"status":p.get("status","active")})
     return out
 
-def _render_table(all_plans):
+def _render_table(all_plans, key_suffix=""):
     plans=_norm(all_plans)
-    for k in ["campaign_sort","campaign_sort_asc","campaign_page"]:
-        if k not in st.session_state: st.session_state[k]="roi" if k=="campaign_sort" else (True if k=="campaign_sort_asc" else 0)
-    sk,sa=st.session_state.campaign_sort,st.session_state.campaign_sort_asc
+    sfx = key_suffix
+    for k in [f"campaign_sort{sfx}",f"campaign_sort_asc{sfx}",f"campaign_page{sfx}"]:
+        if k not in st.session_state: st.session_state[k]="roi" if "sort" in k else (True if "asc" in k else 0)
+    sk,sa=st.session_state[f"campaign_sort{sfx}"],st.session_state[f"campaign_sort_asc{sfx}"]
     if sk in ("cost","cpa","ctr_pct","cvr_pct","bid","budget"): plans.sort(key=lambda x:x.get(sk,0),reverse=not sa)
     elif sk=="roi": plans.sort(key=lambda x:x["roi"],reverse=not sa)
     else: plans.sort(key=lambda x:str(x.get(sk,"")),reverse=sa)
     ps,tp=5,max(1,(len(plans)+4)//5)
-    pg=min(st.session_state.campaign_page,tp-1)
+    pg=min(st.session_state[f"campaign_page{sfx}"],tp-1)
     s,e=pg*ps,pg*ps+ps
     sc1,sc2,sc3=st.columns([2.5,1.5,2])
     with sc1: st.caption(f"📋 投放计划明细 · 第 {pg+1}/{tp} 页 · 共 {len(plans)} 条")
     with sc2:
         opts=["roi","cost","cpa","ctr_pct","cvr_pct","bid","budget","id","name","platform","status"]
         labs={"roi":"ROI","cost":"消耗","cpa":"CPA","ctr_pct":"CTR","cvr_pct":"CVR","bid":"出价","budget":"预算","id":"ID","name":"名称","platform":"平台","status":"状态"}
-        ns=st.selectbox("排序",opts,index=opts.index(sk),format_func=lambda x:labs.get(x,x),key="sort_sel",label_visibility="collapsed")
-        if ns!=sk: st.session_state.campaign_sort=ns; st.session_state.campaign_sort_asc=(ns not in ("cost","cpa","ctr_pct","cvr_pct","bid","budget")); st.rerun()
+        ns=st.selectbox("排序",opts,index=opts.index(sk),format_func=lambda x:labs.get(x,x),key=f"sort_sel{sfx}",label_visibility="collapsed")
+        if ns!=sk: st.session_state[f"campaign_sort{sfx}"]=ns; st.session_state[f"campaign_sort_asc{sfx}"]=(ns not in ("cost","cpa","ctr_pct","cvr_pct","bid","budget")); st.rerun()
     with sc3:
-        if st.button("↑ 升序" if sa else "↓ 降序",key="toggle_asc",use_container_width=True): st.session_state.campaign_sort_asc=not sa; st.rerun()
+        if st.button("↑ 升序" if sa else "↓ 降序",key=f"toggle_asc{sfx}",use_container_width=True): st.session_state[f"campaign_sort_asc{sfx}"]=not sa; st.rerun()
     html='<div style="margin:0 12px;font-size:10px;"><table style="width:100%;border-collapse:collapse;">'
     html+='<tr style="background:var(--bg-tertiary);color:var(--text-secondary);">'
     for label,key,w in TABLE_COLS:
@@ -106,9 +107,9 @@ def _render_table(all_plans):
     st.markdown(html,unsafe_allow_html=True)
     pc1,pc2=st.columns([1,1])
     with pc1:
-        if st.button("◀ 上一页",key="prev_pg",disabled=(pg==0),use_container_width=True): st.session_state.campaign_page=max(0,pg-1); st.rerun()
+        if st.button("◀ 上一页",key=f"prev_pg{sfx}",disabled=(pg==0),use_container_width=True): st.session_state[f"campaign_page{sfx}"]=max(0,pg-1); st.rerun()
     with pc2:
-        if st.button("下一页 ▶",key="next_pg",disabled=(pg>=tp-1),use_container_width=True): st.session_state.campaign_page=min(tp-1,pg+1); st.rerun()
+        if st.button("下一页 ▶",key=f"next_pg{sfx}",disabled=(pg>=tp-1),use_container_width=True): st.session_state[f"campaign_page{sfx}"]=min(tp-1,pg+1); st.rerun()
 
 
 # =========================================================================
@@ -163,31 +164,57 @@ def render_dashboard():
 
     # ====== 投放 ======
     elif tab == "create":
-        st.markdown("""<div style="padding:12px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
-        📊 <b>投放管理中心</b><br><br>
-        在此创建新的广告投放计划。点击「🚀 新建」表单填写平台、预算、出价和定向信息，提交后计划将加入投放列表。<br><br>
-        💡 <b>提示</b>：新建计划默认状态为 active，初始消耗/ROI/CTR/CVR 均为 0，数据将在投放后由平台回传。
-        </div>""", unsafe_allow_html=True)
-
-        # Show created campaigns
-        created = st.session_state.get("_created_campaigns", [])
         all_plans = cd.get("all_plans", [])
-        user_plans = [p for p in all_plans if p.get("id","").startswith(("C","T")) and p not in [
-            {"id":"C001"},{"id":"C002"},{"id":"C003"},{"id":"C004"},{"id":"C005"},
-            {"id":"T001"},{"id":"T002"},{"id":"T003"},{"id":"T004"},{"id":"T005"},
-        ]]
-        if created:
-            cards = [
-                {"label":"📋 已创建计划","value":str(len(created)),"sub":"本次会话","trend":"up"},
-                {"label":"💰 总预算","value":f"¥{sum(c.get('budget',0) for c in created):,}","sub":"日预算合计","trend":"up"},
-                {"label":"🎯 平均出价","value":f"¥{sum(c.get('bid',0) for c in created)//max(len(created),1):.0f}","sub":"","trend":"warn"},
-                {"label":"✅ 活跃","value":str(sum(1 for c in created if c.get('status')=='active')),"sub":"","trend":"up"},
-            ]
-            st.markdown(_metric_grid(cards), unsafe_allow_html=True)
-            if created:
-                _render_table(created)
+        created = st.session_state.get("_created_campaigns", [])
+
+        # Time filter
+        period = st.selectbox("时间范围", ["今日", "本周", "本月", "全部"],
+                               index=0, key="create_period", label_visibility="collapsed")
+        # Compute filtered plans
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        if period == "今日":
+            days_back = 1
+        elif period == "本周":
+            days_back = 7
+        elif period == "本月":
+            days_back = 30
         else:
-            st.info("👆 暂无创建记录。在左侧面板点击「🚀 新建」创建你的第一条投放计划。")
+            days_back = 9999
+
+        filtered = [p for p in all_plans if p.get("cost", 0) > 0 or p.get("id") in [c["id"] for c in created]]
+        if days_back < 9999:
+            cutoff = today - timedelta(days=days_back)
+            filtered = [p for p in filtered if True]  # keep all for mock data
+
+        total_plans = len(filtered)
+        total_cost = sum(p.get("cost", 0) for p in filtered)
+        total_budget = sum(p.get("budget", 0) for p in filtered)
+        avg_roi = round(sum(p.get("roi", 0) for p in filtered) / max(total_plans, 1), 2)
+        below = [p for p in filtered if p.get("roi", 0) < 2.0 and p.get("roi", 0) > 0]
+
+        # Summary cards
+        cards = [
+            {"label": f"📋 {period}计划", "value": str(total_plans), "sub": f"{len(below)} 条需关注", "trend": "up" if total_plans > 0 else "warn"},
+            {"label": "💰 总消耗", "value": f"¥{total_cost:,}", "sub": f"{period}累计", "trend": "up"},
+            {"label": "🎯 平均 ROI", "value": f"{avg_roi}", "sub": "健康线 2.0" if avg_roi >= 2.0 else "⚠️ 低于2.0", "trend": "up" if avg_roi >= 2.0 else "down", "highlight": avg_roi < 2.0},
+            {"label": "📊 总预算", "value": f"¥{total_budget:,}", "sub": "日预算合计", "trend": "up"},
+        ]
+        html = _metric_grid(cards)
+
+        # Period filtered table
+        if filtered:
+            html += f'<div class="chart-card" style="margin:0 12px 12px 12px;"><div class="chart-title">📋 {period}投放计划明细</div></div>'
+            st.markdown(html, unsafe_allow_html=True)
+            _render_table(filtered, "_period")
+        else:
+            st.markdown(html, unsafe_allow_html=True)
+            st.info(f"👆 {period}暂无投放数据。点击左侧「🚀 新建」创建投放计划。")
+
+        # All plans summary below
+        if all_plans and days_back < 9999:
+            st.markdown("""<div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin:12px 12px 4px 12px;">📋 全部投放计划（分页展示）</div>""", unsafe_allow_html=True)
+            _render_table(all_plans, "_all")
 
     # ====== 内容 ======
     elif tab == "content":

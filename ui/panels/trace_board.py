@@ -3,7 +3,11 @@ import streamlit as st
 
 
 def render_trace_board():
-    scene = st.session_state.current_scene
+    raw_scene = st.session_state.get("active_tab", st.session_state.current_scene)
+    # Map tab names to scene names used in flow configs
+    tab_to_scene = {"optimize":"ad_placement","create":"create","content":"content",
+                    "ecommerce":"ecommerce","data_analysis":"data_analysis","diagnosis":"diagnosis"}
+    scene = tab_to_scene.get(raw_scene, raw_scene)
     trace = st.session_state.get("trace_events", [])
     has_run = len(trace) > 0  # True after user clicked "查询"
 
@@ -25,6 +29,7 @@ def render_trace_board():
     flow_configs = {
         "ad_placement":  ["任务规划","数据拉取","数据拉取","智能分析","策略建议","执行操作","报告生成"],
         "content":       ["任务规划","数据拉取","智能分析","内容生产","执行操作","报告生成"],
+        "create":        ["参数配置","数据提交","执行操作","报告生成"],
         "ecommerce":     ["任务规划","数据拉取","智能分析","电商运营","执行操作","报告生成"],
         "data_analysis": ["任务规划","数据拉取","数据拉取","数据拉取","智能分析","策略建议","报告生成"],
         "diagnosis":     ["任务规划","数据拉取","智能分析","策略建议","执行操作","报告生成"],
@@ -34,6 +39,7 @@ def render_trace_board():
     flow_keys = {
         "ad_placement":  ["supervisor","data","data_2","analysis","strategy","execute","report"],
         "content":       ["supervisor","data","analysis","content","execute","report"],
+        "create":        ["supervisor","data","execute","report"],
         "ecommerce":     ["supervisor","data","analysis","ecommerce","execute","report"],
         "data_analysis": ["supervisor","data","data_2","data_3","analysis","strategy","report"],
         "diagnosis":     ["supervisor","data","analysis","strategy","execute","report"],
@@ -129,34 +135,108 @@ def render_trace_board():
         if sts == "waiting" and step.get("node") == "execute":
             c1, c2, c3 = st.columns([1, 1, 2])
             with c1:
-                if st.button("✅ 确认执行", key="tr_approve", use_container_width=True, type="primary"):
+                if st.button("✅ 确认执行" if scene != "content" else "✅ 确认发布", key="tr_approve", use_container_width=True, type="primary"):
+                    import requests
                     from datetime import datetime
-                    # Actually execute the optimization actions
-                    _execute_optimizations()
                     ts = datetime.now().isoformat()
+                    if scene == "create":
+                        # Actually create the campaign now
+                        pending = st.session_state.get("_pending_create", {})
+                        if pending:
+                            from tools.mock_functions import create_campaign
+                            new_camp = create_campaign(pending["platform"], pending["name"],
+                                                       pending["budget"], pending["bid"], pending["targeting"])
+                            created = st.session_state.get("_created_campaigns", [])
+                            created.append(new_camp)
+                            st.session_state._created_campaigns = created
+                            st.session_state._reload_data = True
+                            st.session_state._pending_create = None
+                            st.session_state.chat_messages.append({
+                                "role": "agent",
+                                "content": f"🚀 投放计划已上线！\n\n📋 **{new_camp['name']}** ({new_camp['id']})\n• 日预算: ¥{pending['budget']:,}\n• 出价: ¥{pending['bid']}\n• 状态: active\n\n可在右侧「投放」标签查看。"
+                            })
+                    elif scene == "content":
+                        params = st.session_state.get("_pending_content_params", {})
+                        try:
+                            resp = requests.post("http://localhost:8000/content", json={
+                                "session_id": st.session_state.session_id, **params,
+                            }, timeout=30)
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                urls = data.get("urls", [])
+                                url_str = "\n".join(f"📄 {u}" for u in urls) if urls else ""
+                                st.session_state.chat_messages.append({"role": "agent", "content": f"✅ 内容已发布到飞书！\n\n{url_str}"})
+                        except: pass
+                        st.session_state._show_content_preview = False
+                    else:
+                        # Optimization: execute directly
+                        from tools.mock_functions import get_top_campaigns, update_bid, update_budget
+                        from tools.feishu_client import publish_optimization_report
+                        p = st.session_state.optim_params
+                        bid_f = 1 + p.get("bid_adjust_pct", -10) / 100.0
+                        bud_f = 1 + p.get("budget_adjust_pct", -20) / 100.0
+                        thr = p.get("roi_threshold", 2.0)
+                        all_p = []
+                        for plat in p.get("platforms", ["douyin","tencent"]):
+                            plans = get_top_campaigns(plat, p.get("days",7), "cost", p.get("top_n",5))
+                            for pl in plans: pl["_platform"] = plat
+                            all_p.extend(plans)
+                        low = [pl for pl in all_p if pl["roi"] < thr]
+                        changes = []
+                        for pl in low:
+                            ob = pl.get("bid",0); nb = round(ob*bid_f,1)
+                            try: update_bid(pl.get("_platform","douyin"), pl["id"], nb); changes.append(f"{pl['id']}: {ob}->{nb}")
+                            except: pass
+                            if pl["roi"] < thr*0.75:
+                                obu = pl.get("budget",0); nbu = round(obu*bud_f)
+                                try: update_budget(pl.get("_platform","douyin"), pl["id"], nbu); changes.append(f"{pl['id']}: {obu}->{nbu}")
+                                except: pass
+                        try:
+                            rpt = publish_optimization_report([("分析",f"{len(all_p)}条"),("调整",f"{len(changes)}项")], changes)
+                            feishu_url = rpt.get("url","")
+                        except: feishu_url = ""
+                        url_line = f"\n\n📄 [飞书报告]({feishu_url})" if feishu_url else ""
+                        st.session_state.chat_messages.append({"role": "agent", "content": f"✅ 优化执行完成！{len(changes)}项调整。{url_line}"})
+                        st.session_state._reload_data = True
                     events = st.session_state.get("trace_events", [])
                     events = [e for e in events if e["node"] not in ("execute", "report")]
                     events.append({"node":"execute","event":"step_complete","ts":ts})
                     events.append({"node":"report","event":"step_complete","ts":ts})
                     st.session_state.trace_events = events
                     st.session_state.approval_pending = None
-                    st.session_state._reload_data = True  # refresh dashboard
+                    st.session_state._reload_data = True
                     st.rerun()
             with c2:
                 if st.button("✕ 取消", key="tr_reject", use_container_width=True):
                     from datetime import datetime
                     ts = datetime.now().isoformat()
+                    if scene == "create":
+                        st.session_state._pending_create = None
+                        st.session_state.chat_messages.append({"role": "agent", "content": "投放计划已取消。"})
+                    try:
+                        requests.post(f"http://localhost:8000/reject/{st.session_state.session_id}", timeout=10)
+                    except: pass
                     events = st.session_state.get("trace_events", [])
                     events = [e for e in events if e["node"] not in ("execute", "report")]
                     events.append({"node":"execute","event":"step_complete","ts":ts})
                     events.append({"node":"report","event":"step_error","ts":ts})
                     st.session_state.trace_events = events
                     st.session_state.approval_pending = None
+                    st.session_state._show_content_preview = False
+                    st.session_state._pending_create = None
                     st.rerun()
 
     # Hint when no action taken yet
     if not has_run:
-        st.caption("💡 在左侧对话面板输入需求 → 调整参数 → 点击「🚀 开始优化」")
+        hints = {
+            "ad_placement": "💡 在对话面板输入优化需求 → 调整参数 → 点击「🚀 开始优化」",
+            "content": "💡 在对话面板输入内容需求 → 调整参数 → 点击「🔍 预览脚本」",
+            "create": "💡 点击左侧「🚀 新建」填写投放参数 → 提交后在中间面板确认执行",
+            "ecommerce": "💡 在对话面板输入直播需求 → 系统自动补货、发券、生成话术",
+            "data_analysis": "💡 在对话面板输入分析需求 → 系统拉取多平台数据并生成报告",
+            "diagnosis": "💡 在对话面板输入故障信息 → 系统自动诊断并恢复",
+        }
+        st.caption(hints.get(scene, hints["ad_placement"]))
 
 
 def _get_steps_for_scene(scene: str) -> list:
@@ -229,6 +309,13 @@ def _get_steps_for_scene(scene: str) -> list:
             {"node":"strategy","title":"策略建议 — 恢复方案","desc":"自动生成恢复方案：① 将违规素材替换为备用视频 backup_001 ② 重新提交平台审核 ③ 发送飞书通知给优化师小王，告知处理结果。","result":"3 项恢复操作 · 均为低风险，将自动执行","time":""},
             {"node":"execute","title":"执行操作 — 自动恢复","desc":"已自动完成素材替换、重新提交审核、并发送飞书通知给小王。计划 12345 现已进入审核队列，预计 30 分钟内恢复投放。","result":"✅ 素材已替换 ✅ 已重新提交审核 ✅ 飞书通知已发送给小王","time":""},
             {"node":"report","title":"报告生成 — 诊断报告","desc":"故障诊断与恢复流程全部完成。从发现问题到自动恢复全程耗时不到 5 秒，无需人工干预。操作日志已完整记录，可随时追溯。","result":"✅ 自动恢复完成 · 计划已进入审核队列 · 全过程可追溯","time":""},
+        ]
+    elif scene == "create":
+        return [
+            {"node":"supervisor","title":"参数配置 — 接收投放需求","desc":"已接收您填写的投放计划参数：平台、计划名称、日预算、出价、定向信息。正在提交到广告平台。","result":"参数验证通过 · 准备提交","time":""},
+            {"node":"data","title":"数据提交 — 平台审核","desc":"已将计划提交至广告平台。平台自动审核中：验证预算范围、出价合理性、定向设置、素材合规性。","result":"审核通过 · 计划已激活","time":""},
+            {"node":"execute","title":"执行操作 — 计划上线","desc":"计划已成功创建并上线投放。初始数据（消耗/ROI/CTR/CVR）将在投放开始后由平台回传。","result":"✅ 计划已上线 · 状态：active","time":""},
+            {"node":"report","title":"报告生成 — 创建完成","desc":"投放计划创建流程全部完成。新计划已加入投放列表，可在右侧仪表盘「投放」标签查看和管理。","result":"✅ 创建成功 · 可在投放管理中心查看","time":""},
         ]
     return []
 

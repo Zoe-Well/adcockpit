@@ -64,19 +64,19 @@ def render_chat_panel():
                 if not cname.strip():
                     st.error("请输入计划名称")
                 else:
-                    try:
-                        from tools.mock_functions import create_campaign
-                        new_camp = create_campaign(plat, cname.strip(), budget, bid, {"gender": gender, "age_range": age, "interests": interests})
-                        # Store in session
-                        created = st.session_state.get("_created_campaigns", [])
-                        created.append(new_camp)
-                        st.session_state._created_campaigns = created
-                        st.session_state._reload_data = True
-                        st.session_state.chat_messages.append({"role": "agent", "content": f"🚀 新投放计划已创建！\n\n📋 **{new_camp['name']}** ({new_camp['id']})\n• 平台: {'抖音' if plat == 'douyin' else '腾讯广告'}\n• 日预算: ¥{budget:,}\n• 出价: ¥{bid}\n• 状态: {new_camp['status']}\n\n计划已加入投放列表，点击「📋 查询计划」可刷新数据。"})
-                        st.success(f"✅ 计划 {new_camp['id']} 创建成功！")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"创建失败: {e}")
+                    # Save params but DON'T create yet — wait for user confirmation
+                    st.session_state._pending_create = {
+                        "platform": plat, "name": cname.strip(), "budget": budget, "bid": bid,
+                        "targeting": {"gender": gender, "age_range": age, "interests": interests},
+                    }
+                    st.session_state._show_create_form = False
+                    # Start streaming animation, stop at execute=waiting
+                    st.session_state.trace_events = []
+                    st.session_state._trace_animating = True
+                    st.session_state._trace_step = 0
+                    st.session_state._biz_scene = "create"
+                    st.session_state.chat_messages.append({"role": "agent", "content": f"📋 投放计划已就绪，请在中间面板确认执行：\n\n**{cname.strip()}**\n• 平台: {'抖音' if plat == 'douyin' else '腾讯广告'}\n• 日预算: ¥{budget:,}\n• 出价: ¥{bid}\n• 状态: 待确认"})
+                    st.rerun()
 
     # ---- Messages (single HTML block with fixed height for scrollable area) ----
     msgs_html = '<div style="max-height:60vh;overflow-y:auto;padding:0 4px;">'
@@ -114,15 +114,35 @@ def render_chat_panel():
         ca, cb = st.columns(2)
         with ca:
             if st.button("✅ 确认", key="ap_ok", use_container_width=True):
-                try:
-                    requests.post(f"http://localhost:8000/approve/{st.session_state.session_id}", timeout=10)
-                except: pass
-                st.session_state.approval_pending = None
-                # Actually execute optimizations
-                from ui.panels.trace_board import _execute_optimizations
-                changes = _execute_optimizations()
-                # Update trace
+                # Execute optimization changes
+                from tools.mock_functions import get_top_campaigns, update_bid, update_budget
+                from tools.feishu_client import publish_optimization_report
                 from datetime import datetime
+                p = st.session_state.optim_params
+                bid_f = 1 + p.get("bid_adjust_pct", -10) / 100.0
+                bud_f = 1 + p.get("budget_adjust_pct", -20) / 100.0
+                thr = p.get("roi_threshold", 2.0)
+                all_p = []
+                for plat in p.get("platforms", ["douyin","tencent"]):
+                    plans = get_top_campaigns(plat, p.get("days",7), "cost", p.get("top_n",5))
+                    for pl in plans: pl["_platform"] = plat
+                    all_p.extend(plans)
+                low = [pl for pl in all_p if pl["roi"] < thr]
+                changes = []
+                for pl in low:
+                    ob = pl.get("bid",0); nb = round(ob*bid_f,1)
+                    try: update_bid(pl.get("_platform","douyin"), pl["id"], nb); changes.append(f"{pl['id']}: bid {ob}->{nb}")
+                    except: pass
+                    if pl["roi"] < thr*0.75:
+                        obu = pl.get("budget",0); nbu = round(obu*bud_f)
+                        try: update_budget(pl.get("_platform","douyin"), pl["id"], nbu); changes.append(f"{pl['id']}: budget {obu}->{nbu}")
+                        except: pass
+                try:
+                    rpt = publish_optimization_report([("分析",f"{len(all_p)}条"),("调整",f"{len(changes)}项")], changes)
+                    feishu_url = rpt.get("url","")
+                except: feishu_url = ""
+                url_line = f"\n\n📄 [查看飞书报告]({feishu_url})" if feishu_url else ""
+                st.session_state.approval_pending = None
                 ts = datetime.now().isoformat()
                 events = st.session_state.get("trace_events", [])
                 events = [e for e in events if e["node"] not in ("execute", "report")]
@@ -130,9 +150,7 @@ def render_chat_panel():
                 events.append({"node":"report","event":"step_complete","ts":ts})
                 st.session_state.trace_events = events
                 st.session_state._reload_data = True
-                feishu_url = st.session_state.get("_last_feishu_url", "")
-                url_line = f"\n\n📄 [查看飞书报告]({feishu_url})" if feishu_url else "\n\n📄 优化报告已生成（配置 FEISHU_APP_ID 后自动同步飞书文档）"
-                st.session_state.chat_messages.append({"role": "agent", "content": f"✅ 已确认，调价操作已执行！\n\n📊 共调整 {len(changes)} 项：\n" + "\n".join(f"• {c[0]} {c[1]}: {c[2]}" for c in changes) + url_line + "\n\n右侧仪表盘数据已更新。"})
+                st.session_state.chat_messages.append({"role": "agent", "content": f"✅ 已确认！共调整 {len(changes)} 项：\n" + "\n".join(f"• {c}" for c in changes) + url_line})
                 st.rerun()
         with cb:
             if st.button("✕ 取消", key="ap_no", use_container_width=True):
@@ -157,6 +175,18 @@ def render_chat_panel():
             _render_content_param_card()
         else:
             _render_optimize_param_card()
+
+    # ---- Content Preview Card (view only, confirm in Trace Board) ----
+    if st.session_state.get("_show_content_preview", False):
+        scripts = st.session_state.get("_preview_scripts", [])
+        st.markdown("""<div style="font-size:12px;font-weight:600;color:var(--text-secondary);padding:8px 12px 4px 12px;">📝 脚本预览 — 请在中间 Trace Board 确认发布</div>""", unsafe_allow_html=True)
+        for i, s in enumerate(scripts):
+            st.text_area(f"脚本 {i+1}", s[:300], height=80, key=f"preview_script_{i}", disabled=True)
+        if st.button("↩ 取消预览", key="btn_cancel_publish", use_container_width=True):
+            st.session_state._show_content_preview = False
+            st.session_state.trace_events = []
+            st.session_state.chat_messages.append({"role": "agent", "content": "已取消。"})
+            st.rerun()
 
     # ---- Input ----
     st.markdown("<hr style='border-color:var(--border);margin:6px 12px;'>", unsafe_allow_html=True)
@@ -327,11 +357,12 @@ def _render_optimize_param_card():
                     "budget_adjust_pct": budget_adj, "risk_confirm": risk_confirm,
                 }
                 st.session_state.show_param_card = False
-                st.session_state._reload_data = True
+                st.session_state.chat_messages.append({"role": "agent", "content": f"🚀 开始优化！参数：{len(platforms)}平台/{days}天/Top{top_n}/ROI<{roi_threshold}/出价{bid_adj:+d}%"})
+                # Start streaming animation (data changes on approval confirm)
                 st.session_state.trace_events = []
                 st.session_state._trace_animating = True
                 st.session_state._trace_step = 0
-                st.session_state.chat_messages.append({"role": "agent", "content": f"🚀 开始优化！参数：{len(platforms)}平台/{days}天/Top{top_n}/ROI<{roi_threshold}/出价{bid_adj:+d}%"})
+                st.session_state._biz_scene = "ad_placement"
                 st.rerun()
         with c2:
             if st.button("↩ 取消", key="btn_cancel_optimize", use_container_width=True):
@@ -361,22 +392,19 @@ def _render_content_param_card():
                                     index=["summer_promo","flash_sale","product_review"].index(params.get("template_id","summer_promo")),
                                     format_func=lambda x: {"summer_promo":"夏季促销","flash_sale":"闪购秒杀","product_review":"产品测评"}.get(x,x))
             auto_pub = st.checkbox("自动发布到飞书", value=params.get("auto_publish", True))
-        c1, c2, c3 = st.columns([1.5, 1, 3])
+        c1, c2 = st.columns(2)
         with c1:
-            if st.button("🚀 开始生产", key="btn_run_content", use_container_width=True, type="primary"):
+            if st.button("🔍 预览脚本", key="btn_preview_content", use_container_width=True, type="primary"):
                 st.session_state.content_params = {
                     "platform": platform, "date": date, "top_n": top_n,
                     "worst_n": worst_n, "template_id": template, "auto_publish": auto_pub,
                 }
-                st.session_state.show_param_card = False
-                st.session_state._biz_scene = "content"
-
-                # Generate scripts + publish to Feishu (with retry for mock failures)
-                from tools.mock_functions import generate_script
+                # Generate scripts locally for preview (retry up to 5 times for mock failures)
                 scripts = []
+                from tools.mock_functions import generate_script
                 for i in range(top_n):
                     ok = False
-                    for attempt in range(5):
+                    for _ in range(5):
                         try:
                             s = generate_script(template_id=template, params={"product_name": f"爆款商品-{chr(65+i)}"})
                             scripts.append(s)
@@ -385,37 +413,23 @@ def _render_content_param_card():
                         except Exception:
                             pass
                     if not ok:
-                        scripts.append(f"[脚本{chr(65+i)}生成失败]")
-
-                from tools.feishu_client import publish_scripts
-                try:
-                    results = publish_scripts(scripts, platform, template)
-                    urls = [r.get("url", "") for r in results]
-                    mock = results[0].get("mock", True) if results else True
-                    via = "真实飞书文档" if not mock else "Demo模拟"
-                    url_str = "\n".join(f"📄 脚本{i+1}: {u}" for i, u in enumerate(urls))
-                    st.session_state.chat_messages.append({
-                        "role": "agent",
-                        "content": f"✏️ 开始内容生产！{platform}/{date}/Top{top_n}/模板{template}\n\n✅ 已生成 {len(scripts)} 条脚本并发布到{via}：\n\n{url_str}"
-                    })
-                except Exception as e:
-                    err = str(e)[:200]
-                    # Mock errors are not real Feishu errors — just retry
-                    if "暂不可用" in err or "请稍后" in err:
-                        st.session_state.chat_messages.append({
-                            "role": "agent",
-                            "content": f"✏️ 开始内容生产！{platform}/{date}/Top{top_n}/模板{template}\n\n⚠️ 网络波动，请重试一次（这只是 Demo 的随机模拟，不是真实错误）"
-                        })
-                    else:
-                        st.session_state.chat_messages.append({
-                            "role": "agent",
-                            "content": f"✏️ 开始内容生产！{platform}/{date}/Top{top_n}/模板{template}\n\n⚠️ 飞书发布失败：{err}"
-                        })
-
-                # Start animation
+                        scripts.append(f"[脚本{chr(65+i)}生成失败，请重试]")
+                st.session_state._preview_scripts = scripts
+                st.session_state._pending_content_params = {
+                    "platform": platform, "date": date, "top_n": top_n,
+                    "worst_n": worst_n, "template_id": template, "auto_publish": auto_pub,
+                }
+                st.session_state.show_param_card = False
+                st.session_state._show_content_preview = True
+                st.session_state._biz_scene = "content"
+                # Start streaming animation for content flow
                 st.session_state.trace_events = []
                 st.session_state._trace_animating = True
                 st.session_state._trace_step = 0
+                st.session_state.chat_messages.append({
+                    "role": "agent",
+                    "content": f"🔍 脚本预览已生成（共 {len(scripts)} 条），请检查后在中间面板确认发布。"
+                })
                 st.rerun()
         with c2:
             if st.button("↩ 取消", key="btn_cancel_content", use_container_width=True):

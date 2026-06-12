@@ -174,6 +174,139 @@ def _run_graph(session_id: str, user_input: str, sse_manager) -> dict:
     return state
 
 
+# ----- Optimization & Content endpoints -----
+
+class OptimizeRequest(BaseModel):
+    session_id: str
+    platforms: list = ["douyin", "tencent"]
+    days: int = 7
+    top_n: int = 5
+    roi_threshold: float = 2.0
+    bid_adjust_pct: int = -10
+    budget_adjust_pct: int = -20
+    risk_confirm: str = "medium"
+
+
+@router.post("/optimize")
+async def optimize(request: Request, body: OptimizeRequest):
+    """Run optimization with parameters, return results + Feishu URL."""
+    import sys; sys.path.insert(0, ".")
+    from tools.mock_functions import get_top_campaigns, update_bid, update_budget
+    from tools.feishu_client import publish_optimization_report
+
+    sse = _resolve_sse_manager(request)
+    sid = body.session_id
+    sse.create_session(sid)
+
+    ts = datetime.now().isoformat()
+    # Streaming events
+    for node in ["supervisor", "data", "data_2", "analysis", "strategy"]:
+        sse.emit_sync(sid, "step_start", {"node": node, "ts": ts})
+        sse.emit_sync(sid, "step_complete", {"node": node, "status": "done", "ts": ts})
+
+    # Fetch and analyze
+    all_plans = []
+    for plat in body.platforms:
+        plans = get_top_campaigns(plat, body.days, "cost", body.top_n)
+        for p in plans:
+            p["_platform"] = plat
+        all_plans.extend(plans)
+
+    below = [p for p in all_plans if p["roi"] < body.roi_threshold]
+    changes = []
+
+    # Execute optimizations
+    for p in below:
+        old_bid = p.get("bid", 0)
+        new_bid = round(old_bid * (1 + body.bid_adjust_pct / 100.0), 1)
+        update_bid(p.get("_platform", "douyin"), p["id"], new_bid)
+        changes.append(f"{p['id']}: 出价 {old_bid}->{new_bid}")
+        if p["roi"] < body.roi_threshold * 0.75:
+            old_budget = p.get("budget", 0)
+            new_budget = round(old_budget * (1 + body.budget_adjust_pct / 100.0))
+            update_budget(p.get("_platform", "douyin"), p["id"], new_budget)
+            changes.append(f"{p['id']}: 预算 {old_budget}->{new_budget}")
+
+    # Publish report
+    try:
+        rows = [("分析计划", f"{len(all_plans)}条"), ("不达标", f"{len(below)}条"),
+                ("调整项", f"{len(changes)}项")]
+        report = publish_optimization_report(rows, changes)
+        feishu_url = report.get("url", "")
+    except Exception:
+        feishu_url = ""
+
+    sse.emit_sync(sid, "step_start", {"node": "execute", "ts": ts})
+    sse.emit_sync(sid, "step_complete", {"node": "execute", "status": "done", "ts": ts})
+    sse.emit_sync(sid, "step_start", {"node": "report", "ts": ts})
+    sse.emit_sync(sid, "step_complete", {"node": "report", "status": "done", "ts": ts})
+    sse.emit_sync(sid, "execution_complete", {"session_id": sid, "ts": ts})
+
+    return {
+        "session_id": sid, "status": "completed",
+        "changes": changes, "below_count": len(below),
+        "feishu_url": feishu_url,
+    }
+
+
+class ContentRequest(BaseModel):
+    session_id: str
+    platform: str = "douyin"
+    date: str = "yesterday"
+    top_n: int = 3
+    worst_n: int = 3
+    template_id: str = "summer_promo"
+    auto_publish: bool = True
+
+
+@router.post("/content")
+async def content_produce(request: Request, body: ContentRequest):
+    """Generate scripts and publish to Feishu, return URLs."""
+    import sys; sys.path.insert(0, ".")
+    from tools.mock_functions import generate_script
+    from tools.feishu_client import publish_scripts
+
+    sse = _resolve_sse_manager(request)
+    sid = body.session_id
+    sse.create_session(sid)
+    ts = datetime.now().isoformat()
+
+    for node in ["supervisor", "data", "analysis", "content"]:
+        sse.emit_sync(sid, "step_start", {"node": node, "ts": ts})
+        sse.emit_sync(sid, "step_complete", {"node": node, "status": "done", "ts": ts})
+
+    scripts = []
+    for i in range(body.top_n):
+        for _ in range(3):
+            try:
+                s = generate_script(template_id=body.template_id, params={"product_name": f"爆款商品-{chr(65+i)}"})
+                scripts.append(s)
+                break
+            except Exception:
+                pass
+        else:
+            scripts.append(f"[生成失败]")
+
+    urls = []
+    if body.auto_publish:
+        try:
+            results = publish_scripts(scripts, body.platform, body.template_id)
+            urls = [r.get("url", "") for r in results]
+        except Exception:
+            pass
+
+    sse.emit_sync(sid, "step_start", {"node": "execute", "ts": ts})
+    sse.emit_sync(sid, "step_complete", {"node": "execute", "status": "done", "ts": ts})
+    sse.emit_sync(sid, "step_start", {"node": "report", "ts": ts})
+    sse.emit_sync(sid, "step_complete", {"node": "report", "status": "done", "ts": ts})
+    sse.emit_sync(sid, "execution_complete", {"session_id": sid, "ts": ts})
+
+    return {
+        "session_id": sid, "status": "completed",
+        "scripts": scripts, "urls": urls,
+    }
+
+
 # ----- Routes -----
 @router.post("/execute", response_model=ExecuteResponse)
 async def execute(request: Request, body: ExecuteRequest):

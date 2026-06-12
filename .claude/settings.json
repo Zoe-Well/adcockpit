@@ -7,7 +7,10 @@
       "Bash(py -c \"compile\\(open\\('ui/panels/chat_panel.py'\\).read\\(\\), 'chat_panel.py', 'exec'\\); print\\('OK'\\)\")",
       "Bash(py -c \"compile\\(open\\('ui/app.py'\\).read\\(\\),'app','exec'\\);compile\\(open\\('ui/panels/trace_board.py'\\).read\\(\\),'tb','exec'\\);print\\('OK'\\)\")",
       "Bash(py -m pip install certifi -q)",
-      "Bash(py -m pip install urllib3 charset_normalizer -q)"
+      "Bash(py -m pip install urllib3 charset_normalizer -q)",
+      "Bash(py -c \"compile\\(open\\('ui/panels/dashboard.py'\\).read\\(\\),'db','exec'\\); print\\('OK'\\)\")",
+      "Bash(git commit *)",
+      "Bash(Co-Authored-By: Claude)"
     ]
   }
 }

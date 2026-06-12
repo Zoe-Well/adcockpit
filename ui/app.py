@@ -147,6 +147,8 @@ def main():
         biz_scene = st.session_state.get("_biz_scene", "ad_placement")
         if biz_scene == "content":
             node_order = ["supervisor", "data", "analysis", "content", "execute", "report"]
+        elif biz_scene == "create":
+            node_order = ["supervisor", "data", "execute", "report"]
         else:
             node_order = ["supervisor", "data", "data_2", "analysis", "strategy", "execute", "report"]
         # Each node gets multiple frames for typing animation
@@ -197,8 +199,36 @@ def main():
             st.session_state._typing_progress = 1.0
             st.session_state._active_node = None
 
+            # Create: leave execute as waiting, report as pending
+            if biz_scene == "create":
+                ts = datetime.now().isoformat()
+                events = st.session_state.get("trace_events", [])
+                for node in node_order:
+                    if node in ("execute", "report"):
+                        evt = "approval_required" if node == "execute" else "step_pending"
+                    else:
+                        evt = "step_complete"
+                    events = [e for e in events if e["node"] != node]
+                    events.append({"node": node, "event": evt, "ts": ts})
+                st.session_state.trace_events = events
+            # Content: leave execute as waiting, report as pending
+            elif biz_scene == "content":
+                ts = datetime.now().isoformat()
+                events = st.session_state.get("trace_events", [])
+                # Ensure execute/report stay in approval/pending state
+                for e in events:
+                    if e["node"] == "execute":
+                        e["event"] = "approval_required"
+                    if e["node"] == "report":
+                        e["event"] = "step_pending"
+                # If execute/report not in events, add them
+                if not any(e["node"] == "execute" for e in events):
+                    events.append({"node":"execute","event":"approval_required","ts":ts})
+                if not any(e["node"] == "report" for e in events):
+                    events.append({"node":"report","event":"step_pending","ts":ts})
+                st.session_state.trace_events = events
             # Ad placement: show approval card
-            if not st.session_state.get("approval_pending") and biz_scene != "content":
+            elif not st.session_state.get("approval_pending"):
                 st.session_state.approval_pending = [
                     {"target_id":"C001","action":"update_bid","params":{"new_bid":22.5},"risk_level":"medium"},
                     {"target_id":"T001","action":"update_bid","params":{"new_bid":27.0},"risk_level":"medium"},

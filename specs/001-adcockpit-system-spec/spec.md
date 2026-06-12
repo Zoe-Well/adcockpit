@@ -786,3 +786,30 @@ sequenceDiagram
 - 确认卡片超时时间默认为 5 分钟，可在配置中修改。
 - 长期记忆（用户偏好、模板、分析维度）存储在本地 JSON 文件中，重启后保留。
 - 飞书通知和 ERP 日志均为 Mock 实现，不实际发送消息或写入外部系统。
+
+---
+
+## Implementation Status (v1.0, 2026-06-11)
+
+**Architecture**: Streamlit direct-call (no separate backend required).
+FastAPI layer (`api/`) retained as optional.
+
+**Implemented**:
+
+| Area | Status |
+|------|--------|
+| Three-column cockpit UI (32%/26%/42%) | ✅ |
+| 6 mutually-exclusive tabs (optimize/create/content/ecommerce/data_analysis/diagnosis) | ✅ |
+| Intent classification (conversational vs business) | ✅ |
+| Streaming animation engine (flow tracker + typing cards) | ✅ |
+| Optimization flow: param card → animation → approval → execute → Feishu report | ✅ |
+| Content production: param card → preview → animation → confirm → Feishu publish | ✅ |
+| Campaign creation: form → animation → confirm → go live | ✅ |
+| Real Feishu document API integration (with mock fallback) | ✅ |
+| 24 Mock functions (10% business + 5% network exceptions) | ✅ |
+| Dynamic dashboard: scene-adaptive views + paginated sortable tables | ✅ |
+| LangGraph agent graph (8 agents, optional) | ✅ |
+| Human-in-the-loop (parameter customization + confirm-before-execute) | ✅ |
+| `_find_plan` returns original reference for in-place mutations | ✅ |
+
+**Architecture**: `Streamlit → direct call → Mock Functions / Feishu Client`
