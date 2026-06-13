@@ -10,7 +10,10 @@
       "Bash(py -m pip install urllib3 charset_normalizer -q)",
       "Bash(py -c \"compile\\(open\\('ui/panels/dashboard.py'\\).read\\(\\),'db','exec'\\); print\\('OK'\\)\")",
       "Bash(git commit *)",
-      "Bash(Co-Authored-By: Claude)"
+      "Bash(Co-Authored-By: Claude)",
+      "WebFetch(domain:www.aminer.org)",
+      "Bash(py -c \"compile\\(open\\('ui/app.py'\\).read\\(\\),'a','exec'\\); print\\('app OK'\\); compile\\(open\\('ui/theme.py'\\).read\\(\\),'t','exec'\\); print\\('theme OK'\\); compile\\(open\\('ui/panels/chat_panel.py'\\).read\\(\\),'c','exec'\\); print\\('chat OK'\\)\")",
+      "Bash(git checkout *)"
     ]
   }
 }
