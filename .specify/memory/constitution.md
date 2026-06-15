@@ -1,19 +1,21 @@
 <!--
 Sync Impact Report
 ==================
-Version change: [TEMPLATE] → 1.0.0 (initial ratification)
-Modified principles: N/A (first version)
+Version change: 1.0.0 → 2.0.0 (MAJOR — architecture redesign)
+Modified principles:
+  - IV. AI-First 开发范式 → IV. AI-First 开发范式 + 生产级架构
 Added sections:
-  - Core Principles (5 principles, user-specified)
-  - 技术约束 (Technical Constraints)
-  - 开发工作流 (Development Workflow)
-  - Governance
-Removed sections: None
+  - 前端 React 18+ + shadcn/ui + Tailwind CSS 约束
+  - Celery + Redis 异步任务约束
+  - Chroma + RAG 长期记忆约束
+  - WebSocket 流式推送约束
+Removed sections:
+  - Streamlit 相关约束
+  - Mock Server 约束
 Templates requiring updates:
-  ✅ plan-template.md — "Constitution Check" section is dynamically gated; no static changes needed
-  ✅ spec-template.md — generic placeholders align with business domains; no changes needed
-  ✅ tasks-template.md — generic task phases align with AI-First workflow; no changes needed
-  ✅ checklist-template.md — generic; no changes needed
+  ✅ plan-template.md — Constitution Check 动态门禁，无需修改
+  ✅ spec-template.md — 通用模板，无需修改
+  ✅ tasks-template.md — 通用模板，无需修改
 Follow-up TODOs: None
 -->
 
@@ -74,19 +76,30 @@ Human-in-the-loop 中断与审批机制。
 **理由**: 单一投放优化场景无法体现"全链路数字营销服务"的广度。四个域覆盖了 JD 中
 要求的广告、内容、电商、数据能力，每个域都可作为独立演示场景。
 
-### IV. AI-First 开发范式
+### IV. AI-First 开发范式 + 生产级架构
 
-项目代码 MUST 由 AI Coding 生成不低于 95%，前端 MUST 优先使用 Streamlit 构建。
+项目代码 MUST 由 AI Coding 生成不低于 95%。架构 MUST 采用标准前后端分离模式。
 
-- 所有 Agent 节点、Mock 工具、前端组件均由 Claude Code 等 AI 工具生成。
-- 前端选用 Streamlit 作为首选框架，通过 WebSocket 实时推送执行状态。
-- 后端采用 FastAPI，Agent 编排层使用 LangGraph。
-- LLM 层支持 deepseek，通过 Function Calling 驱动工具调用。
-- 项目结构遵循：`agents/` (Agent 定义)、`tools/` (Mock 函数)、`ui/` (Streamlit
-  三栏布局)、`api/` (FastAPI 后端)。
+**前端**:
+- MUST 使用 React 18+ + TypeScript + Tailwind CSS + shadcn/ui 组件库。
+- MUST 展示 Agent 的思考过程和工具调用状态（中间 Trace Board 面板）。
+- MUST 支持流式响应（WebSocket 实时推送 Agent 思考内容）。
 
-**理由**: 演示目标之一是展示 AI Coding 工作流能力。Streamlit 提供最快的 UI 原型
-速度，适合 Demo 场景。95% AI 生成率是自我验证 AI Coding 范式的硬指标。
+**后端**:
+- MUST 使用 FastAPI 提供 REST API + WebSocket 端点。
+- MUST 使用 LangGraph 作为 Agent 编排框架，集成 DeepSeek 模型。
+- MUST 使用 Celery 处理异步 Agent 任务。
+- MUST 使用 Redis 管理会话短期记忆。
+- MUST 使用 Chroma 向量数据库实现 RAG 长期记忆。
+
+**项目结构**:
+```
+frontend/   (React + shadcn/ui + Tailwind)
+backend/    (FastAPI + LangGraph + Celery + Redis + Chroma)
+```
+
+**理由**: 生产级架构，前后端分离便于独立部署和扩展。React+shadcn/ui 提供企业级
+UI 体验，Celery+Redis 保证异步任务的可靠性，Chroma+RAG 实现智能长期记忆。
 
 ### V. Mock-First 数据模拟
 
@@ -102,30 +115,30 @@ Human-in-the-loop 中断与审批机制。
 **理由**: Demo 环境无法接入真实平台 API。高质量的 Mock 是演示 Multi-Agent 编排、
 异常处理、Human-in-the-loop 等核心能力的前提。模拟真实异常才能展示系统的鲁棒性。
 
-## 技术约束
-## 技术栈约束
-## 1. 强制性版本约束 (Hard Constraints)
-| 类别 | 强制约束 (Must Use) | 补充要求/目标 |
-| :--- | :--- | :--- |
-| **语言/运行时** | **Python 3.11** | 必须使用现代语法特性。 |
-| **API 框架** | **FastAPI==0.136.3** | 所有API定义必须使用Pydantic模型。 |
-| **ASGI 服务器** | **uvicorn[standard]==0.49.0** | 用于运行FastAPI应用。 |
-| **核心 Agent 框架** | **LangGraph==1.0.10** | **禁止**使用 `create_react_agent`，必须使用新的函数式API。 |
-| **LLM 集成库** | **LangChain==1.2.3** | **必须**通过 `create_agent` 和中间件构建Agent。 |
-| **LLM 接口库** | **langchain-openai==1.0.1** | 用于通过统一接口调用GLM-4模型。 |
-| **工具定义** | **LangChain Tools (@tool)** | 所有Agent工具必须用此方式定义。 |
-| **状态管理** | **LangGraph 内置 MemorySaver** | 用于管理会话状态和记忆。 |
-| **API 集成** | **FastAPI Mock Server** | 模拟巨量引擎API，代码需易于替换为真实调用。 |
-| **包管理工具** | **uv** | 统一使用uv进行依赖管理和虚拟环境管理。 |
-| **环境变量管理** | **python-dotenv==1.0.0** | 用于加载`.env`文件中的配置。 |
+## 技术约束 v2.0
 
-## 2. 版本选择理由 (Rationale for Version Locking)
-- **LangGraph 1.0+**：提供了更稳定、类型安全的函数式API（`@entrypoint`, `@task`），是未来发展的方向，可避免使用已废弃的API。
-- **LangChain 1.0+**：与LangGraph 1.0同步发布，提供了更模块化的架构和统一的Agent构建方式（`create_agent`）。
+### 1. 强制性版本约束
 
-**依赖管理**:
-- MUST 使用 `requirements.txt` 或 `pyproject.toml` 管理依赖
-- 依赖版本 MUST 锁定主要版本号（如 `fastapi>=0.100.0,<1.0.0`）
+| 类别 | 技术选型 | 约束 |
+|------|---------|------|
+| **前端框架** | React 18+ + TypeScript | MUST 使用函数组件 + Hooks |
+| **UI 组件库** | shadcn/ui | 基于 Radix UI 的 headless 组件 |
+| **CSS 框架** | Tailwind CSS 3+ | 原子化 CSS |
+| **后端框架** | FastAPI (Python 3.11) | 所有 API 用 Pydantic 模型 |
+| **Agent 框架** | LangGraph + LangChain | StateGraph + `create_agent` |
+| **LLM 模型** | DeepSeek (via langchain-openai) | Function Calling 驱动 |
+| **异步任务** | Celery + Redis | Agent 执行在 Celery Worker 中 |
+| **WebSocket** | FastAPI WebSocket | 实时推送 Agent 思考内容 |
+| **短期记忆** | Redis | 会话上下文缓存 (TTL 1h) |
+| **长期记忆/RAG** | Chroma | 向量检索历史优化记录 |
+| **包管理** | uv / pip | 统一依赖管理 |
+
+### 2. 架构约束
+
+- 前后端 MUST 完全分离，通过 REST API + WebSocket 通信。
+- Agent 执行 MUST 在 Celery 异步任务中进行，避免阻塞 HTTP 请求。
+- WebSocket MUST 实时推送 Agent 的中间思考步骤和工具调用结果。
+- RAG 检索 MUST 在 Chroma 中完成，embedding 使用 DeepSeek 模型。
 
 ### 代码规范
 
@@ -174,4 +187,4 @@ Human-in-the-loop 中断与审批机制。
 - 发现与宪法冲突的实现 MUST 在 plan.md 的 Complexity Tracking 中记录并说明理由。
 - 架构选型如偏离 LangGraph / Streamlit，MUST 在 plan.md 中提供充分论证。
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-09
+**Version**: 2.0.0 | **Ratified**: 2026-06-09 | **Last Amended**: 2026-06-13

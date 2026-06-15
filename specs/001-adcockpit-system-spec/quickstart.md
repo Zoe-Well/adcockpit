@@ -1,67 +1,75 @@
-# Quickstart: AdCockpit v1.0
+# Quickstart: AdCockpit v2.0
 
 **Feature**: 001-adcockpit-system-spec
-**Date**: 2026-06-11
+**Date**: 2026-06-13
 
 ## Prerequisites
 
-- Python 3.9+
-- pip
+- Docker + Docker Compose
+- Node.js 20+ (for local frontend dev)
+- Python 3.11+ (for local backend dev)
+- Redis (for Celery broker + session)
 
-## Setup
-
-```bash
-# Install dependencies
-pip install streamlit requests python-dotenv
-```
-
-## Run (single command)
+## One-Command Start (Docker)
 
 ```bash
-cd f:/IQA代码/Demo2
-set PYTHONPATH=.
-streamlit run ui/app.py
+docker compose up
 ```
 
-Open `http://localhost:8501` in browser (1920×1080 recommended).
+Opens `http://localhost:3000` (frontend) and `http://localhost:8000` (backend).
 
-## Optional: Feishu Integration
+## Local Dev Setup
 
-Copy `.env.example` to `.env` and fill in your Feishu app credentials:
+### Backend
 
 ```bash
-FEISHU_APP_ID=cli_xxxxxxxx
-FEISHU_APP_SECRET=xxxxxxxx
-FEISHU_FOLDER_TOKEN=        # Optional
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000 --reload
 ```
 
-Without credentials, Feishu publishing falls back to mock mode (generates demo links).
+### Celery Worker
 
-## Architecture
-
+```bash
+cd backend
+celery -A app.tasks worker --loglevel=info
 ```
-Streamlit (8501) ──直接调用──→ Mock Functions + Feishu Client
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-No separate backend needed. Optimization, content production, and Feishu publishing all run directly within the Streamlit process.
+### Redis (required for session + Celery)
 
-## Six Tabs
+```bash
+redis-server
+```
 
-| Tab | Scene | Function |
-|-----|-------|----------|
-| 🎯 优化 | ad_placement | Query campaigns → set ROI threshold → streaming animation → approve → execute optimization → Feishu report |
-| 📊 投放 | create | Fill form → submit → streaming animation → confirm → campaign goes live |
-| 🎬 内容 | content | Set params → preview scripts → streaming animation → confirm → publish to Feishu |
-| 🛒 电商 | ecommerce | View live metrics, stock, coupons |
-| 📈 数据 | data_analysis | Client ranking, budget proposals, PPT outline |
-| 🔧 诊断 | diagnosis | Root cause analysis, recovery log |
+### Chroma (for RAG)
 
-## Key Files
+```bash
+chroma run --path ./chroma_data
+```
 
-| Layer | Files |
-|-------|-------|
-| UI | `ui/app.py` (main), `ui/panels/chat_panel.py`, `ui/panels/dashboard.py`, `ui/panels/trace_board.py`, `ui/theme.py` |
-| Tools | `tools/mock_functions.py` (24 mock functions), `tools/mock_data.py` (seed data), `tools/feishu_client.py` (Feishu API) |
-| Agents | `agents/supervisor.py` (intent classification), `agents/state.py` (TypedDict) |
-| API | `api/` (FastAPI - optional, for content publishing to Feishu) |
-| Mock Server | `mock_server/` (standalone mock REST API - optional) |
+## Environment Variables (.env)
+
+```bash
+DEEPSEEK_API_KEY=sk-xxx
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+REDIS_URL=redis://localhost:6379
+CHROMA_HOST=localhost
+CHROMA_PORT=8001
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=xxx
+```
+
+## Verification
+
+1. Open `http://localhost:3000` — three-column cockpit renders
+2. Type "检查最近7天抖音ROI" in chat → agent responds with parameter card
+3. Click "开始优化" → Trace Board animates → Dashboard updates
+4. Type "你好" → conversational reply, no parameter card

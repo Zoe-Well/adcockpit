@@ -1,0 +1,90 @@
+[
+  {
+    "changes": [
+      "C001: bid 25.0->22.5",
+      "C004: bid 20.0->18.0",
+      "T001: bid 30.0->27.0",
+      "T001: budget 5000->4000"
+    ],
+    "below_count": 3,
+    "total_plans": 10,
+    "params": {
+      "platforms": [
+        "douyin",
+        "tencent"
+      ],
+      "days": 7,
+      "top_n": 5,
+      "roi_threshold": 2.0,
+      "bid_adjust_pct": -10,
+      "budget_adjust_pct": -20
+    },
+    "saved_at": "2026-06-14T23:37:03.535716"
+  },
+  {
+    "changes": [
+      "C001: bid 22.5->20.2",
+      "C004: bid 18.0->16.2",
+      "T001: bid 27.0->24.3",
+      "T001: budget 4000->3200"
+    ],
+    "below_count": 3,
+    "total_plans": 10,
+    "params": {
+      "platforms": [
+        "douyin",
+        "tencent"
+      ],
+      "days": 7,
+      "top_n": 5,
+      "roi_threshold": 2.0,
+      "bid_adjust_pct": -10,
+      "budget_adjust_pct": -20
+    },
+    "saved_at": "2026-06-15T00:06:47.235289"
+  },
+  {
+    "changes": [
+      "C001: bid 20.2->18.2",
+      "C004: bid 16.2->14.6",
+      "T001: bid 24.3->21.9",
+      "T001: budget 3200->2560"
+    ],
+    "below_count": 3,
+    "total_plans": 10,
+    "params": {
+      "platforms": [
+        "douyin",
+        "tencent"
+      ],
+      "days": 7,
+      "top_n": 5,
+      "roi_threshold": 2.0,
+      "bid_adjust_pct": -10,
+      "budget_adjust_pct": -20
+    },
+    "saved_at": "2026-06-16T00:59:32.974433"
+  },
+  {
+    "changes": [
+      "C001: bid 18.2->16.4",
+      "C004: bid 14.6->13.1",
+      "T001: bid 21.9->19.7",
+      "T001: budget 2560->2048"
+    ],
+    "below_count": 3,
+    "total_plans": 10,
+    "params": {
+      "platforms": [
+        "douyin",
+        "tencent"
+      ],
+      "days": 7,
+      "top_n": 5,
+      "roi_threshold": 2.0,
+      "bid_adjust_pct": -10,
+      "budget_adjust_pct": -20
+    },
+    "saved_at": "2026-06-16T01:10:23.061246"
+  }
+]

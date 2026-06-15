@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>AdCockpit v2 — React Preview</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg: '#f7f8fc', card: '#ffffff', border: '#e8ecf1',
+        accent: '#3b82f6', 'accent-light': '#eff6ff',
+        green: '#10b981', red: '#ef4444', amber: '#f59e0b',
+        text: '#1e293b', 'text-2': '#64748b', 'text-3': '#94a3b8',
+      }
+    }
+  }
+}
+</script>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.scrollbar::-webkit-scrollbar { width: 4px; }
+.scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+.step-card { transition: all 0.3s ease; }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
+.anim-pulse { animation: pulse 1.5s ease-in-out infinite; }
+</style>
+</head>
+<body class="bg-bg text-text h-screen overflow-hidden">
+
+<!-- ====== HEADER ====== -->
+<header class="h-[52px] bg-card border-b border-border flex items-center px-6 gap-4 fixed top-0 left-0 right-0 z-50 shadow-sm">
+  <span class="font-bold text-[16px] text-accent tracking-tight">AdCockpit</span>
+  <span class="text-text-2 text-sm">| AI 数字营销驾驶舱</span>
+  <div class="ml-auto flex items-center gap-4 text-xs text-text-3">
+    <span class="flex items-center gap-1"><span class="w-[7px] h-[7px] rounded-full bg-green inline-block"></span>系统运行中</span>
+    <span id="clock"></span>
+    <span>会话: demo-0613</span>
+  </div>
+</header>
+
+<!-- ====== SIDEBAR ====== -->
+<nav class="fixed top-[52px] left-0 bottom-0 w-[200px] bg-card border-r border-border flex flex-col py-5 z-40">
+  <div class="text-[10px] font-semibold uppercase tracking-[1px] text-text-3 px-4 pb-2">业务操作</div>
+  <button onclick="switchTab('optimize',this)" class="sidebar-btn active flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">▸ 投放优化</button>
+  <button onclick="switchTab('create',this)" class="sidebar-btn flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">＋ 新建计划</button>
+  <button onclick="switchTab('content',this)" class="sidebar-btn flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">✎ 内容生产</button>
+  <div class="border-t border-border mx-4 my-3"></div>
+  <div class="text-[10px] font-semibold uppercase tracking-[1px] text-text-3 px-4 pb-2">数据监控</div>
+  <button onclick="switchTab('ecommerce',this)" class="sidebar-btn flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">◉ 直播监控</button>
+  <button onclick="switchTab('data_analysis',this)" class="sidebar-btn flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">☰ 数据分析</button>
+  <button onclick="switchTab('diagnosis',this)" class="sidebar-btn flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">⚙ 故障诊断</button>
+  <div class="border-t border-border mx-4 my-3"></div>
+  <div class="text-[10px] font-semibold uppercase tracking-[1px] text-text-3 px-4 pb-2">设置</div>
+  <button class="flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">↻ 历史记录</button>
+  <button class="flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-0.5 font-medium">⚙ 系统设置</button>
+  <div class="flex-1"></div>
+  <div class="border-t border-border mx-4 mb-3"></div>
+  <button class="flex items-center gap-2 px-4 py-2 text-[13px] text-text-2 hover:bg-bg rounded-md mx-2 mb-1 font-medium">🌐 English / 中文</button>
+  <div class="flex items-center gap-2 px-4 py-2 mx-2 mb-4 bg-bg rounded-md">
+    <div class="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center text-xs font-semibold">王</div>
+    <div><div class="text-[12px] font-semibold">优化师小王</div><div class="text-[9px] text-text-3">wang@agency.com</div></div>
+  </div>
+</nav>
+
+<!-- ====== MAIN ====== -->
+<main class="ml-[200px] mt-[52px] flex h-[calc(100vh-52px)]">
+
+  <!-- LEFT: Chat -->
+  <div class="w-[30%] min-w-[360px] flex flex-col border-r border-border bg-bg">
+    <div class="px-4 py-3 bg-card border-b border-border text-[11px] font-semibold uppercase tracking-[0.5px] text-text-2 flex-shrink-0">对话面板</div>
+    <div class="flex-1 flex flex-col">
+      <div id="chatMsgs" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scrollbar">
+        <div class="flex gap-2"><div class="w-[30px] h-[30px] rounded-md bg-accent text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">AI</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px] leading-relaxed">你好，我是 AdCockpit AI 优化师。我可以帮你完成广告投放优化、内容生产、直播监控、数据分析和故障诊断。<br><br>请用自然语言描述你的需求。</div></div>
+        <div class="flex gap-2 flex-row-reverse"><div class="w-[30px] h-[30px] rounded-md bg-bg border border-border text-text-2 flex items-center justify-center text-xs font-semibold flex-shrink-0">王</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-accent text-white text-[13px] leading-relaxed">检查最近7天抖音和腾讯广告消耗Top5中ROI低于2.0的计划，对不达标的自动降价10%。</div></div>
+        <div class="flex gap-2"><div class="w-[30px] h-[30px] rounded-md bg-accent text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">AI</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px] leading-relaxed">收到。我已准备好优化参数，你可以自由调整后执行。</div></div>
+      </div>
+
+      <!-- Param Card -->
+      <div id="paramCard" class="mx-4 mb-3 p-4 bg-card border border-border rounded-lg" style="display:none">
+        <h4 class="text-[13px] font-semibold mb-3">优化参数设置</h4>
+        <div class="grid grid-cols-2 gap-2.5 mb-2.5">
+          <div><label class="text-[11px] text-text-2 block mb-1">投放平台</label><select class="w-full px-2.5 py-1.5 border border-border rounded text-xs"><option>抖音 + 腾讯广告</option></select></div>
+          <div><label class="text-[11px] text-text-2 block mb-1">时间范围</label><select class="w-full px-2.5 py-1.5 border border-border rounded text-xs"><option>近 7 天</option></select></div>
+          <div><label class="text-[11px] text-text-2 block mb-1">拉取计划数</label><input type="number" value="5" class="w-full px-2.5 py-1.5 border border-border rounded text-xs"></div>
+          <div><label class="text-[11px] text-text-2 block mb-1">ROI 阈值</label><input type="number" value="2.0" step="0.1" class="w-full px-2.5 py-1.5 border border-border rounded text-xs"></div>
+          <div><label class="text-[11px] text-text-2 block mb-1">出价调整 %</label><input type="number" value="-10" class="w-full px-2.5 py-1.5 border border-border rounded text-xs"></div>
+          <div><label class="text-[11px] text-text-2 block mb-1">预算调整 %</label><input type="number" value="-20" class="w-full px-2.5 py-1.5 border border-border rounded text-xs"></div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="runOptimize()" class="px-5 py-2 bg-accent text-white rounded-md text-xs font-semibold hover:bg-blue-700">开始优化</button>
+          <button onclick="document.getElementById('paramCard').style.display='none'" class="px-5 py-2 bg-card text-text-2 border border-border rounded-md text-xs hover:bg-bg">取消</button>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 bg-card border-t border-border flex gap-2">
+        <input id="chatInput" type="text" placeholder="描述你的优化需求..." class="flex-1 px-3.5 py-2.5 border border-border rounded-md text-[13px] outline-none focus:border-accent bg-bg" onkeydown="if(event.key==='Enter')sendMsg()">
+        <button onclick="sendMsg()" class="px-5 py-2.5 bg-accent text-white rounded-md text-[13px] font-semibold hover:bg-blue-700">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MIDDLE: Trace -->
+  <div class="w-[28%] min-w-[360px] flex flex-col border-r border-border bg-bg">
+    <div class="px-4 py-3 bg-card border-b border-border text-[11px] font-semibold uppercase tracking-[0.5px] text-text-2 flex-shrink-0">Agent 编排追踪</div>
+    <div id="traceContent" class="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 scrollbar">
+      <!-- Flow Tracker -->
+      <div id="flowTracker" class="flex items-center justify-center gap-0 py-3"></div>
+      <!-- Step Cards -->
+      <div id="stepCards" class="flex flex-col gap-2"></div>
+      <div id="traceHint" class="text-[11px] text-text-3 text-center mt-4">在对话面板输入需求，系统将在此展示 Agent 编排过程</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Dashboard -->
+  <div class="w-[42%] min-w-[440px] flex flex-col bg-bg">
+    <div class="px-4 py-3 bg-card border-b border-border text-[11px] font-semibold uppercase tracking-[0.5px] text-text-2 flex-shrink-0">数据洞察仪表盘 <span class="font-normal text-text-3 text-[9px]" id="dashMode">投放优化模式</span></div>
+    <div id="dashContent" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 scrollbar">
+      <!-- Default dashboard content -->
+      <div class="grid grid-cols-3 gap-2.5">
+        <div class="bg-card border border-red rounded-lg p-4 bg-red-50"><div class="text-[11px] text-text-3 uppercase tracking-[0.3px] mb-1.5">整体 ROI</div><div class="text-[22px] font-bold text-red">1.87</div><div class="text-[11px] text-red mt-1">▾ 0.23 vs 昨日</div></div>
+        <div class="bg-card border border-border rounded-lg p-4"><div class="text-[11px] text-text-3 uppercase tracking-[0.3px] mb-1.5">总消耗</div><div class="text-[22px] font-bold">37,600</div><div class="text-[11px] text-green mt-1">▴ 8.5% vs 昨日</div></div>
+        <div class="bg-card border border-border rounded-lg p-4"><div class="text-[11px] text-text-3 uppercase tracking-[0.3px] mb-1.5">活跃计划</div><div class="text-[22px] font-bold">10</div><div class="text-[11px] text-green mt-1">3 条需关注</div></div>
+      </div>
+      <div class="bg-card border border-border rounded-lg p-4">
+        <h4 class="text-xs font-semibold text-text-2 mb-3">各计划 ROI 对比（红色 = 低于 2.0 阈值）</h4>
+        <div class="flex items-end gap-1.5 h-[120px] pb-5 relative">
+          <div class="flex-1 rounded-t-sm bg-red/80 min-w-[20px] relative" style="height:41px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">1.5</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">C001</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:63px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">2.3</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">C002</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:85px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">3.1</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">C003</span></div>
+          <div class="flex-1 rounded-t-sm bg-red/80 min-w-[20px] relative" style="height:49px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">1.8</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">C004</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:69px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">2.5</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">C005</span></div>
+          <div class="flex-1 rounded-t-sm bg-red/80 min-w-[20px] relative" style="height:33px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">1.2</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">T001</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:77px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">2.8</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">T002</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:96px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">3.5</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">T003</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:58px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">2.1</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">T004</span></div>
+          <div class="flex-1 rounded-t-sm bg-accent/80 min-w-[20px] relative" style="height:71px"><span class="absolute -top-4 left-0 right-0 text-center text-[9px] font-semibold">2.6</span><span class="absolute -bottom-[18px] left-0 right-0 text-center text-[9px] text-text-3">T005</span></div>
+          <div class="absolute left-0 right-0 border-t border-dashed border-red z-10" style="bottom:79px"></div>
+        </div>
+      </div>
+      <div class="bg-card border border-border rounded-lg border-l-[3px] border-l-red p-3 flex gap-2.5 items-start">
+        <span class="text-base">⚠</span><div><div class="text-xs font-semibold">T001 — ROI 严重偏低</div><div class="text-[11px] text-text-2 mt-0.5">腾讯广告 · 消耗 ¥12,800 · ROI 1.2 · 建议降价 + 降预算</div></div>
+      </div>
+      <div class="bg-card border border-border rounded-lg border-l-[3px] border-l-amber p-3 flex gap-2.5 items-start">
+        <span class="text-base">⚠</span><div><div class="text-xs font-semibold">C001 — ROI 持续下滑</div><div class="text-[11px] text-text-2 mt-0.5">抖音 · 消耗 ¥15,200 · ROI 1.5 · 近 3 天下跌 0.4</div></div>
+      </div>
+      <div class="bg-card border border-border rounded-lg overflow-hidden">
+        <h4 class="text-xs font-semibold text-text-2 px-4 py-3 border-b border-border">投放计划明细（第 1/2 页 · 共 10 条）</h4>
+        <table class="w-full text-[11px]">
+          <thead><tr class="bg-bg text-text-2 font-medium"><th class="text-left px-3 py-2">ID</th><th class="text-left px-3 py-2">名称</th><th class="text-left px-3 py-2">平台</th><th class="text-left px-3 py-2">消耗</th><th class="text-left px-3 py-2">ROI</th><th class="text-left px-3 py-2">CPA</th><th class="text-left px-3 py-2">出价</th><th class="text-left px-3 py-2">状态</th></tr></thead>
+          <tbody>
+            <tr class="border-b border-border"><td class="px-3 py-2">T001</td><td class="px-3 py-2">618大促</td><td class="px-3 py-2">腾讯</td><td class="px-3 py-2">12,800</td><td class="px-3 py-2 text-red font-semibold">1.2</td><td class="px-3 py-2">45</td><td class="px-3 py-2">30</td><td class="px-3 py-2 text-green">active</td></tr>
+            <tr class="border-b border-border"><td class="px-3 py-2">C001</td><td class="px-3 py-2">夏季促销-A</td><td class="px-3 py-2">抖音</td><td class="px-3 py-2">15,200</td><td class="px-3 py-2 text-red font-semibold">1.5</td><td class="px-3 py-2">40</td><td class="px-3 py-2">25</td><td class="px-3 py-2 text-green">active</td></tr>
+            <tr class="border-b border-border"><td class="px-3 py-2">C004</td><td class="px-3 py-2">品牌日-D</td><td class="px-3 py-2">抖音</td><td class="px-3 py-2">9,600</td><td class="px-3 py-2 text-red font-semibold">1.8</td><td class="px-3 py-2">42</td><td class="px-3 py-2">20</td><td class="px-3 py-2 text-green">active</td></tr>
+            <tr class="border-b border-border"><td class="px-3 py-2">T004</td><td class="px-3 py-2">品宣视频</td><td class="px-3 py-2">腾讯</td><td class="px-3 py-2">8,200</td><td class="px-3 py-2">2.1</td><td class="px-3 py-2">36</td><td class="px-3 py-2">21</td><td class="px-3 py-2 text-green">active</td></tr>
+            <tr><td class="px-3 py-2">C002</td><td class="px-3 py-2">新品首发-B</td><td class="px-3 py-2">抖音</td><td class="px-3 py-2">14,100</td><td class="px-3 py-2">2.3</td><td class="px-3 py-2">35</td><td class="px-3 py-2">30</td><td class="px-3 py-2 text-green">active</td></tr>
+          </tbody>
+        </table>
+        <div class="flex justify-between px-4 py-2.5 text-[11px] text-text-2">
+          <button class="px-3 py-1 border border-border rounded bg-card text-xs">‹ 上一页</button><span>第 1/2 页</span><button class="px-3 py-1 border border-border rounded bg-card text-xs">下一页 ›</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// Sidebar
+function switchTab(tab, btn) {
+  document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active','bg-accent-light','text-accent','font-semibold'));
+  btn.classList.add('active','bg-accent-light','text-accent','font-semibold');
+  const names = {optimize:'投放优化模式',create:'投放管理模式',content:'内容生产模式',ecommerce:'电商场控模式',data_analysis:'数据分析模式',diagnosis:'故障诊断模式'};
+  document.getElementById('dashMode').textContent = names[tab] || tab;
+}
+
+// Chat
+function sendMsg() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim(); if (!text) return;
+  const msgs = document.getElementById('chatMsgs');
+  msgs.innerHTML += `<div class="flex gap-2 flex-row-reverse"><div class="w-[30px] h-[30px] rounded-md bg-bg border border-border text-text-2 flex items-center justify-center text-xs font-semibold flex-shrink-0">王</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-accent text-white text-[13px] leading-relaxed">${text}</div></div>`;
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Detect intent
+  const bizKws = ['检查','优化','ROI','调价','计划','投放','分析','素材','脚本','直播','库存','诊断'];
+  const isBiz = bizKws.some(kw => text.includes(kw));
+  setTimeout(() => {
+    if (isBiz) {
+      msgs.innerHTML += `<div class="flex gap-2"><div class="w-[30px] h-[30px] rounded-md bg-accent text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">AI</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px] leading-relaxed">收到。我已准备好优化参数，你可以自由调整后执行。</div></div>`;
+      document.getElementById('paramCard').style.display = 'block';
+    } else {
+      msgs.innerHTML += `<div class="flex gap-2"><div class="w-[30px] h-[30px] rounded-md bg-accent text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">AI</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px] leading-relaxed">你好！我是 AdCockpit AI 优化师，可以帮你做投放优化、内容生产、直播监控和数据分析。请具体描述你的需求。</div></div>`;
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 600);
+}
+
+// Trace animation
+function runOptimize() {
+  document.getElementById('paramCard').style.display = 'none';
+  document.getElementById('traceHint').style.display = 'none';
+
+  const nodes = ['意图识别','数据拉取','数据拉取','智能分析','策略生成','执行操作','报告生成'];
+  const steps = [
+    {t:'意图识别 — 任务规划',d:'识别为投放优化意图，拆解为 6 个子任务。数据将并行拉取。',r:''},
+    {t:'数据拉取 — 抖音',d:'拉取抖音近 7 天消耗最高的 5 条计划，涵盖消耗金额、ROI、出价等指标。',r:'5 条计划 · 数据拉取完成'},
+    {t:'数据拉取 — 腾讯广告',d:'拉取腾讯广告近 7 天消耗最高的 5 条计划。数据已与抖音侧合并。',r:'5 条计划 · 数据拉取完成'},
+    {t:'智能分析 — 异常检测',d:'分析全部计划，筛选 ROI 低于阈值 2.0 的计划，标注严重程度。',r:'3 条异常 · 不达标消耗占比 37.6%'},
+    {t:'策略生成 — 优化方案',d:'针对不达标计划生成优化建议：降价 + 必要时降预算。',r:'降价 + 降预算 · 预计改善整体 ROI'},
+    {t:'执行操作 — 等待确认',d:'中高风险操作需要你的审批确认。',r:'等待审批'},
+    {t:'报告生成 — 完成',d:'优化报告已生成。',r:'优化完成'},
+  ];
+
+  // Flow tracker
+  let ft = '';
+  nodes.forEach((n,i) => {
+    const dot = i===0 ? '<div class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-green bg-green-50 text-green">✓</div>' : '<div class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-border bg-bg text-text-3"></div>';
+    const line = i>0 ? `<div class="w-6 h-[2px] ${i<=1?'bg-green':'bg-border'} flex-shrink-0"></div>` : '';
+    ft += `${line}<div class="flex flex-col items-center gap-1">${dot}<span class="text-[9px] text-text-3 whitespace-nowrap">${n}</span></div>`;
+  });
+  document.getElementById('flowTracker').innerHTML = ft;
+
+  // Step cards
+  let sc = '';
+  steps.forEach((s,i) => {
+    const cls = i===0 ? 'border-l-green' : 'border-l-border';
+    const icon = i===0 ? '<div class="w-7 h-7 rounded-md bg-green-50 text-green flex items-center justify-center text-[13px]">✓</div>' : '<div class="w-7 h-7 rounded-md bg-bg flex items-center justify-center text-[13px]"></div>';
+    sc += `<div class="step-card bg-card border border-border rounded-lg ${cls} border-l-[3px] p-3 flex gap-2.5 opacity-60"><div class="flex-shrink-0">${icon}</div><div><div class="text-xs font-semibold">${s.t}</div><div class="text-[11px] text-text-2 leading-relaxed">${i===0?s.d:''}</div></div></div>`;
+  });
+  document.getElementById('stepCards').innerHTML = sc;
+
+  // Animate
+  let frame = 0;
+  const interval = setInterval(() => {
+    const nIdx = Math.min(Math.floor(frame/3), nodes.length-1);
+    const prog = (frame%3)/3;
+
+    // Update flow dots
+    const dots = document.querySelectorAll('#flowTracker .flow-node > div:first-child, #flowTracker > div:nth-child(even) > div:first-child');
+    document.querySelectorAll('#flowTracker [class*="w-[22px]"]').forEach((d,i) => {
+      if (i < nIdx) { d.className = d.className.replace(/border-\w+/,'border-green').replace(/bg-\w+/g,'bg-green-50').replace(/text-\w+/,'text-green'); d.textContent='✓'; }
+      else if (i === nIdx && prog < 0.8) { d.className = d.className.replace(/border-\w+/,'border-accent'); d.textContent='⋯'; d.classList.add('anim-pulse'); }
+      else if (i === nIdx) { d.className += ' border-amber bg-amber-50 text-amber'; d.textContent='!'; }
+    });
+
+    // Update step cards
+    const cards = document.querySelectorAll('#stepCards .step-card');
+    cards.forEach((c,i) => {
+      if (i < nIdx) {
+        c.style.opacity = '1';
+        c.classList.add('border-l-green');
+        c.querySelector('.step-desc, [class*="leading-relaxed"]').textContent = steps[i].d;
+        const icon = c.querySelector('[class*="w-7"]');
+        if (icon) { icon.className = 'w-7 h-7 rounded-md bg-green-50 text-green flex items-center justify-center text-[13px] flex-shrink-0'; icon.textContent='✓'; }
+      } else if (i === nIdx) {
+        c.style.opacity = '1';
+        if (prog < 0.8) c.classList.add('border-l-accent');
+        else c.classList.add('border-l-amber');
+        const chars = Math.max(3, Math.floor(steps[i].d.length * Math.min(prog*1.5, 1)));
+        const descEl = c.querySelector('[class*="leading-relaxed"]');
+        if (descEl) descEl.textContent = steps[i].d.substring(0, chars) + (prog<0.8?'▌':'');
+      }
+    });
+
+    frame++;
+    if (frame >= nodes.length * 3) {
+      clearInterval(interval);
+      // Show approval
+      document.getElementById('chatMsgs').innerHTML += `<div class="flex gap-2"><div class="w-[30px] h-[30px] rounded-md bg-accent text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">AI</div><div class="max-w-[85%] px-3.5 py-2.5 rounded-lg bg-amber-50 border border-amber text-[13px] leading-relaxed"><div class="font-semibold text-amber mb-2">待确认 — 调价策略</div><div class="flex justify-between py-1.5 border-b border-amber-200"><span>C001</span><span>降价至 ¥22.5</span><span class="text-amber">MEDIUM</span></div><div class="flex justify-between py-1.5 border-b border-amber-200"><span>T001</span><span>降价至 ¥27.0</span><span class="text-amber">MEDIUM</span></div><div class="flex justify-between py-1.5 border-b border-amber-200"><span>T001</span><span>降预算至 ¥4000</span><span class="text-red">HIGH</span></div><div class="flex justify-between py-1.5"><span>C004</span><span>降价至 ¥18.0</span><span class="text-green">LOW</span></div><div class="flex gap-2 mt-3"><button onclick="this.closest('.flex.gap-2').innerHTML='<div class=\"max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px]\">已确认执行。3条计划降价10%，1条降预算20%。预计节省 ¥5,640/天，ROI 预计提升至 2.1。</div>'" class="flex-1 py-2 bg-green text-black rounded-md text-xs font-semibold">确认执行</button><button onclick="this.closest('.flex.gap-2').innerHTML='<div class=\"max-w-[85%] px-3.5 py-2.5 rounded-lg bg-card border border-border text-[13px]\">操作已取消。</div>'" class="flex-1 py-2 bg-card text-red border border-red rounded-md text-xs font-semibold">取消</button></div></div></div>`;
+      document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+    }
+  }, 150);
+}
+
+// Clock
+setInterval(() => { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN'); }, 1000);
+document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN');
+</script>
+</body>
+</html>
