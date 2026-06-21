@@ -19,7 +19,29 @@
       "Read(//c/Program Files/**)",
       "Read(//c/Users/zoe/AppData/Local/Programs/**)",
       "Bash(pip install *)",
-      "Bash(python -m pytest tests/unit/test_intent.py -v)"
+      "Bash(python -m pytest tests/unit/test_intent.py -v)",
+      "Bash(nslookup api.zoewell.cn)",
+      "Bash(curl -s -o /dev/null -w \"HTTP: %{http_code}\" --connect-timeout 10 https://api.zoewell.cn/health)",
+      "Bash(nslookup adcockpitapi.zoewell.cn)",
+      "Bash(curl -s --connect-timeout 10 https://adcockpitapi.zoewell.cn/health)",
+      "Bash(curl -sk --connect-timeout 10 https://adcockpitapi.zoewell.cn/health)",
+      "Bash(curl -s --connect-timeout 10 https://w4ut9ntz.up.railway.app/health)",
+      "Bash(curl -s --connect-timeout 10 https://w4ut9ntz.up.railway.app/)",
+      "Bash(curl -s --connect-timeout 10 https://w4ut9ntz.up.railway.app/docs)",
+      "Bash(git config *)",
+      "Bash(curl -sk --connect-timeout 10 https://api.zoewell.cn/health)",
+      "Bash(curl -sv --connect-timeout 10 https://w4ut9ntz.up.railway.app/)",
+      "Bash(curl -sv --connect-timeout 15 https://w4ut9ntz.up.railway.app/health)",
+      "Bash(curl -s --connect-timeout 15 http://w4ut9ntz.up.railway.app:8080/health)",
+      "Bash(curl -s --connect-timeout 10 https://6vo6bmfu.up.railway.app/health)",
+      "Bash(curl -sv --connect-timeout 10 https://api.zoewell.cn/health)",
+      "Bash(curl -s --connect-timeout 10 https://api.zoewell.cn/health)",
+      "Bash(curl -s --connect-timeout 10 https://adcockpit.zoewell.cn)",
+      "Bash(curl -sv --connect-timeout 10 https://6vo6bmfu.up.railway.app/health)",
+      "Bash(curl -s --connect-timeout 10 http://6vo6bmfu.up.railway.app:8080/health)",
+      "Bash(curl -s --connect-timeout 10 http://6vo6bmfu.up.railway.app/health)",
+      "Bash(curl -sv https://6vo6bmfu.up.railway.app/health)",
+      "Bash(curl -sv https://6vo6bmfu.up.railway.app/docs)"
     ]
   }
 }

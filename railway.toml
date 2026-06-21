@@ -1,9 +1,0 @@
-[build]
-# Railway uses Nixpacks by default
-# https://nixpacks.com/docs/providers/python
-
-[deploy]
-startCommand = "uvicorn backend.app.api.main:app --host 0.0.0.0 --port ${PORT:-8080}"
-
-[service]
-rootDirectory = "/"
