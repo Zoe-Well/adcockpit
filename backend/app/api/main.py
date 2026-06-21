@@ -9,12 +9,7 @@ from backend.app.api import campaigns, content, intent, ws, agent
 app = FastAPI(title="AdCockpit v2 API", version="2.0.0")
 
 # ── CORS ──────────────────────────────────────────────────────────────
-_cors_origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    _os.getenv("CORS_ORIGIN", ""),
-    "https://*.vercel.app",
-]
+_cors_origins = ["*"]
 _cors_origins = [o for o in _cors_origins if o]
 app.add_middleware(
     CORSMiddleware,

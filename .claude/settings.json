@@ -41,7 +41,15 @@
       "Bash(curl -s --connect-timeout 10 http://6vo6bmfu.up.railway.app:8080/health)",
       "Bash(curl -s --connect-timeout 10 http://6vo6bmfu.up.railway.app/health)",
       "Bash(curl -sv https://6vo6bmfu.up.railway.app/health)",
-      "Bash(curl -sv https://6vo6bmfu.up.railway.app/docs)"
+      "Bash(curl -sv https://6vo6bmfu.up.railway.app/docs)",
+      "Bash(curl -s https://6vo6bmfu.up.railway.app/)",
+      "Bash(curl -s https://6vo6bmfu.up.railway.app/docs)",
+      "Bash(curl -s --connect-timeout 10 https://6vo6bmfu.up.railway.app/api/campaigns/all)",
+      "Bash(curl -s --connect-timeout 10 https://6vo6bmfu.up.railway.app/docs)",
+      "Bash(curl -s --connect-timeout 10 https://adcockpit-production-3602.up.railway.app/health)",
+      "Bash(curl -s --connect-timeout 10 https://adcockpit-production-3602.up.railway.app/api/campaigns/all)",
+      "Bash(curl -s --connect-timeout 10 https://adcockpit-production-3602.up.railway.app/api/agent/optimize -X POST -H \"Content-Type: application/json\" -d '{\"user_input\":\"test\",\"platforms\":[\"douyin\"]}')",
+      "Bash(curl -s --connect-timeout 10 https://adcockpit-production-3602.up.railway.app/api/agent/optimize -X POST -H \"Content-Type: application/json\" -H \"X-API-Key: adcockpit-demo-2026\" -d '{\"user_input\":\"test\",\"platforms\":[\"douyin\"]}')"
     ]
   }
 }
