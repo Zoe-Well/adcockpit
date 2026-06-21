@@ -10,6 +10,9 @@ venv/
 env/
 *.egg
 
+# Node
+node_modules/
+
 # IDE
 .vscode/
 .idea/

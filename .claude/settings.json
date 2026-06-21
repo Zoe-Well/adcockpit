@@ -13,7 +13,13 @@
       "Bash(Co-Authored-By: Claude)",
       "WebFetch(domain:www.aminer.org)",
       "Bash(py -c \"compile\\(open\\('ui/app.py'\\).read\\(\\),'a','exec'\\); print\\('app OK'\\); compile\\(open\\('ui/theme.py'\\).read\\(\\),'t','exec'\\); print\\('theme OK'\\); compile\\(open\\('ui/panels/chat_panel.py'\\).read\\(\\),'c','exec'\\); print\\('chat OK'\\)\")",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, '.'\\); from backend.app.api.intent import keyword_fallback; print\\(keyword_fallback\\('广告投放'\\)\\)\")",
+      "Bash(where python *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/zoe/AppData/Local/Programs/**)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest tests/unit/test_intent.py -v)"
     ]
   }
 }

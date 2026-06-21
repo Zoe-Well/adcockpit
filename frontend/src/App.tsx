@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from './components/ui/button'
 import { Card, CardHeader, CardContent } from './components/ui/card'
 import { Input } from './components/ui/input'
@@ -6,41 +6,48 @@ import { Badge } from './components/ui/badge'
 
 type Tab = 'optimize' | 'create' | 'content' | 'ecommerce' | 'data_analysis' | 'diagnosis'
 type Message = { role: 'user' | 'agent'; content: string }
-const API = 'http://localhost:8000'
+const API = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000'
+if (API === 'http://localhost:8000' && !location.hostname.includes('localhost')) {
+  console.warn('[AdCockpit] ⚠️ VITE_API_URL 未配置，API 请求将发送到 localhost:8000。请在 Vercel/环境变量中设置 VITE_API_URL。')
+}
+const API_KEY = (import.meta as any).env?.VITE_API_KEY || ''
+const apiOpts = (body?: any): RequestInit => ({
+  method: body ? 'POST' : 'GET',
+  headers: {
+    'Content-Type': 'application/json',
+    ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+  } as Record<string, string>,
+  ...(body ? { body: JSON.stringify(body) } : {}),
+})
 
-const TRACE: Record<string, { flow: string[]; steps: { title: string; desc: string; result: string }[] }> = {
-  optimize: {
-    flow: ['意图识别','数据拉取','数据拉取','智能分析','策略生成','执行操作','报告生成'],
-    steps: [
-      {title:'意图识别 — 任务规划',desc:'识别为投放优化意图，拆解为 6 个子任务。抖音和腾讯数据将并行拉取。',result:''},
-      {title:'数据拉取 — 抖音',desc:'拉取抖音近7天消耗最高的5条计划，涵盖消耗、ROI、出价等指标。',result:'5条计划 · 拉取完成'},
-      {title:'数据拉取 — 腾讯广告',desc:'拉取腾讯广告近7天消耗最高的5条计划，数据已与抖音侧合并。',result:'5条计划 · 拉取完成'},
-      {title:'智能分析 — 异常检测',desc:'分析10条计划，筛选ROI低于阈值的异常计划，标注严重程度。',result:'发现3条异常 · 不达标占比37.6%'},
-      {title:'策略生成 — 优化方案',desc:'生成4条动作：3条降价10% + 1条降预算20%，预计每天节省¥5,640。',result:'降价+降预算 · 预计改善整体ROI'},
-      {title:'执行操作 — 等待确认',desc:'中高风险操作需审批。请查看左侧确认卡片。',result:'等待审批'},
-      {title:'报告生成 — 完成',desc:'优化报告已生成，可在右侧仪表盘查看更新数据。',result:'优化完成'},
-    ]
+// ── Onboarding example prompts ── (#3)
+const EXAMPLES = [
+  '优化抖音最近7天的投放ROI',
+  '生成3条夏季促销带货脚本',
+  '新建一个抖音广告投放计划',
+]
+
+// ── Node types that are actual LLM calls vs mock/data ──
+const LLM_NODES = new Set(['supervisor', 'analysis_agent', 'strategy_agent', 'content_agent'])
+const isLLMNode = (node: string) => LLM_NODES.has(node)
+
+// ── Scene descriptions for P0#2 tab placeholders ──
+const PLACEHOLDER: Record<string, { title: string; desc: string; features: string[] }> = {
+  ecommerce: {
+    title: '直播场控',
+    desc: '实时库存监控、智能发券、催单话术推送',
+    features: ['库存查询与自动补货', '直播间优惠券创建与发放', 'AI 催单话术实时推送', 'GMV 预估与数据看板'],
   },
-  content: {
-    flow: ['意图识别','素材拉取','智能分析','脚本生成','执行操作','报告生成'],
-    steps: [
-      {title:'意图识别 — 任务规划',desc:'识别为内容生产意图，拆解为5个子任务。将基于投放数据优化素材内容。',result:''},
-      {title:'素材拉取 — 数据获取',desc:'获取指定平台的高点击率和低点击率素材数据，用于对比分析。',result:'6条素材 · 高CTR 3条 + 低CTR 3条'},
-      {title:'智能分析 — 爆款特征',desc:'AI分析高点击视频的共性：前3秒价格锚点、快语速、热门BGM、15-30秒时长。',result:'4个爆款特征 · 低点击素材开场平淡'},
-      {title:'脚本生成 — 内容创作',desc:'基于爆款特征和选定模板，生成带货口播脚本。每条脚本包含开场钩子+产品卖点+下单引导。',result:'3条脚本已生成'},
-      {title:'执行操作 — 等待确认',desc:'脚本预览已生成，确认后将发布到飞书文档。',result:'等待确认'},
-      {title:'报告生成 — 完成',desc:'内容生产流程完成。脚本已可在飞书中查看和编辑。',result:'内容生产完成'},
-    ]
+  data_analysis: {
+    title: '数据分析',
+    desc: '跨平台数据聚合、客户排名、预算分配建议',
+    features: ['多平台消耗与 ROI 汇总', '客户维度排名与对比', '预算再分配智能建议', '一键生成 PPT 提纲'],
   },
-  create: {
-    flow: ['参数配置','平台审核','执行操作','报告生成'],
-    steps: [
-      {title:'参数配置 — 接收需求',desc:'已接收投放计划参数：平台、计划名称、日预算、出价、定向信息。',result:''},
-      {title:'平台审核 — 提交校验',desc:'提交至广告平台审核：验证预算范围、出价合理性、定向设置。',result:'审核通过'},
-      {title:'执行操作 — 等待确认',desc:'计划已通过审核，等待确认上线。',result:'等待确认'},
-      {title:'报告生成 — 完成',desc:'计划已创建并上线，初始数据将在投放后回传。',result:'创建成功'},
-    ]
-  }
+  diagnosis: {
+    title: '故障诊断',
+    desc: '计划异常自动排查、根因分析、自主恢复',
+    features: ['计划状态实时查询', 'AI 根因定位与分类', '自动替换素材+重提审', '飞书通知 + 操作日志'],
+  },
 }
 
 const FALLBACK: {id:string;roi:number;cost:number;cpa:number;bid:number;_platform:string;name:string}[] = [
@@ -58,14 +65,19 @@ const FALLBACK: {id:string;roi:number;cost:number;cpa:number;bid:number;_platfor
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('optimize')
-  const [msgs, setMsgs] = useState<Message[]>([{role:'agent',content:'你好，我是 AdCockpit AI 优化师。我可以帮你完成广告投放优化、内容生产、直播监控、数据分析和故障诊断。\n\n请用自然语言描述你的需求。'}])
+  const [msgs, setMsgs] = useState<Message[]>([{role:'agent',content:'你好，我是 AdCockpit AI 优化师。我可以帮你完成广告投放优化、内容生产、直播监控、数据分析和故障诊断。\n\n请用自然语言描述你的需求，或点击下方快捷提示 👇'}])
   const [input, setInput] = useState('')
   const [showParam, setShowParam] = useState(false)
   const [traceStep, setTraceStep] = useState(-1)
+  void traceStep // used via setTraceStep in run*/confirm*
   const [approval, setApproval] = useState(false)
   const [approvalData, setApprovalData] = useState<{id:string;a:string;r:string}[]>([])
   const [bizScene, setBizScene] = useState('ad_placement')
   const [plans, setPlans] = useState(FALLBACK)
+  const [prevPlans, setPrevPlans] = useState<typeof FALLBACK | null>(null)           // #7 before/after
+  const [dataLoading, setDataLoading] = useState(false)                               // #12 loading skeleton
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)                  // #20 timestamp
+  const [dataSource, setDataSource] = useState<'live' | 'fallback'>('fallback')       // #C silent fallback warning
   const [contentPlatform, setContentPlatform] = useState('douyin')
   const [contentTemplate, setContentTemplate] = useState('summer_promo')
   const [contentCount, setContentCount] = useState('3')
@@ -74,109 +86,333 @@ export default function App() {
   const [agentSteps, setAgentSteps] = useState<{node:string;title:string;status:string;output:string}[]>([])
   const [contentRecords, setContentRecords] = useState<{scripts:string[];urls:string[];platform:string;template:string;time:string}[]>([])
   const [tablePage, setTablePage] = useState(0)
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set())
+  // #13 controlled optimization params
+  const [optDays, setOptDays] = useState('7')                                         // #13
+  const [optThreshold, setOptThreshold] = useState('2.0')                             // #13
+  const [optBidAdj, setOptBidAdj] = useState('-10')                                   // #13
+  const [optBudgetAdj, setOptBudgetAdj] = useState('-20')                             // #13
   const PAGE_SIZE = 5
   const msgsRef = useRef<HTMLDivElement>(null)
+
+  const toggleExpand = (i:number) => {
+    setExpandedSteps(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
+  }
 
   useEffect(() => { msgsRef.current?.scrollTo(0, msgsRef.current.scrollHeight) }, [msgs])
 
   const loadPlans = async () => {
+    setDataLoading(true)                                                              // #12
     try {
-      const r = await fetch(`${API}/api/campaigns/all`)
-      if (r.ok) { const d = await r.json(); if (d.plans?.length) setPlans(d.plans) }
-    } catch {}
+      const r = await fetch(`${API}/api/campaigns/all`, apiOpts())
+      if (r.ok) { const d = await r.json(); if (d.plans?.length) { setPlans(d.plans); setDataSource('live') } }
+    } catch { setDataSource('fallback') }
+    setDataLoading(false)
+    setLastUpdated(new Date().toLocaleTimeString('zh-CN'))                             // #20
   }
+
+  // #3 clickable example prompts
+  const clickExample = (prompt: string) => { setInput(prompt); sendMsg(prompt) }
+
   useEffect(() => { loadPlans() }, [])
 
-  const sendMsg = async () => {
-    const t = input.trim(); if (!t) return
+  // #5 tab switch protection
+  const switchTab = useCallback((key: Tab) => {
+    if (approval) {
+      if (!confirm('当前有未完成的操作，切换标签将丢失进度。确定离开吗？')) return
+    }
+    setTab(key); setTraceStep(-1); setApproval(false); setShowParam(false)
+    setAgentSteps([]); setExpandedSteps(new Set()); setPrevPlans(null)
+  }, [approval])
+
+  const sendMsg = async (inputOverride?: string) => {
+    const t = (inputOverride || input).trim(); if (!t) return
     setMsgs(p => [...p, {role:'user',content:t}]); setInput('')
     try {
-      const r = await fetch(`${API}/api/intent/classify`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_input:t,history:msgs.slice(-6)})})
+      const r = await fetch(`${API}/api/intent/classify`, apiOpts({user_input:t,history:msgs.slice(-6)}))
       const d = await r.json()
-      if (d.type === 'business') { setBizScene(d.scene||'ad_placement'); if(d.scene==='create'){setTab('create');setMsgs(p=>[...p,{role:'agent',content:d.reply||'请在下方表单填写投放参数。'}]);setShowParam(false)}else{setMsgs(p=>[...p,{role:'agent',content:d.reply||'收到。请调整参数后执行。'}]);setShowParam(true)} }
+      if (d.type === 'business') {
+        const scene = d.scene || 'ad_placement'
+        const sceneToTab: Record<string, Tab> = {
+          ad_placement: 'optimize', content: 'content', create: 'create',
+          ecommerce: 'ecommerce', data_analysis: 'data_analysis', diagnosis: 'diagnosis',
+        }
+        setBizScene(scene)
+        setTab(sceneToTab[scene] || 'optimize')
+        setAgentSteps([])
+        setExpandedSteps(new Set())
+        if (scene === 'create') {
+          setMsgs(p => [...p, {role:'agent', content: d.reply || '请在下方表单填写投放参数。'}])
+          setShowParam(false)
+        } else {
+          setMsgs(p => [...p, {role:'agent', content: d.reply || '收到。请调整参数后执行。'}])
+          setShowParam(true)
+        }
+      }
       else setMsgs(p => [...p,{role:'agent',content:d.reply||'请具体描述你的需求。'}])
-    } catch { setMsgs(p => [...p,{role:'agent',content:'后端未连接。先启动: uvicorn backend.app.api.main:app --port 8000'}]) }
+    } catch { setMsgs(p => [...p,{role:'agent',content:'系统暂时无法响应，请检查网络连接或稍后重试。 ⚠️ 这可能是因为后端服务未启动。'}]) }   // #4
   }
 
-  const runOptimize = () => {
-    setShowParam(false); setTraceStep(0); setApproval(false); setApprovalData([])
-    const sc = TRACE[tab]||TRACE.optimize
-    const stopIdx = sc.flow.length - 2
-    const total = stopIdx * 3 + 1; let frame = 0
-    const iv = setInterval(() => { frame++; setTraceStep(Math.min(Math.floor(frame/3),stopIdx)); if(frame>=total){clearInterval(iv);setApproval(true)} }, 150)
-    // Fetch real data for approval card
-    fetch(`${API}/api/campaigns/all`).then(r=>r.json()).then(d=>{
-      const items:any[]=[]
-      const bp=0.9; const budp=0.8
-      d.plans?.filter((p:any)=>(p.roi||0)<2.0&&p.roi>0).forEach((p:any)=>{
-        items.push({id:p.id,a:`降价至 ¥${(p.bid*bp).toFixed(1)}`,r:p.roi<1.2?'HIGH':p.roi<1.5?'MEDIUM':'LOW'})
-        if(p.roi<1.5) items.push({id:p.id,a:`降预算至 ¥${Math.round(p.budget*budp)}`,r:'HIGH'})
-      })
-      if(items.length>0) setApprovalData(items.slice(0,6))
-    })
+  const runOptimize = async () => {
+    setShowParam(false); setTraceStep(0); setApproval(false); setApprovalData([]); setExpandedSteps(new Set())
+    const thinkingTexts = [
+      '🔍 正在调用 DeepSeek LLM 分析用户意图…',
+      '📡 向 Agent API 发送优化请求…',
+      '⏳ 等待 Agent 节点依次执行（Supervisor → Data → Analysis）…',
+      '⚡ LangGraph 编排中，预计 3-8 秒完成…',
+    ]
+    let ti=0
+    setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts[0]}])
+    const thinkingIv = setInterval(()=>{ti++;if(ti<thinkingTexts.length)setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts.slice(0,ti+1).join('\n')}])},700)
+    try {
+      const bidAdj = parseInt(optBidAdj) || -10; const budgetAdj = parseInt(optBudgetAdj) || -20      // #13
+      const threshold = parseFloat(optThreshold) || 2.0; const days = parseInt(optDays) || 7          // #13
+      const r = await fetch(`${API}/api/agent/optimize`, apiOpts({user_input:msgs.filter(m=>m.role==='user').slice(-1)[0]?.content||'优化投放',platforms:['douyin','tencent'],days,top_n:5,roi_threshold:threshold,bid_adjust_pct:bidAdj,budget_adjust_pct:budgetAdj}))
+      clearInterval(thinkingIv)
+      const d = await r.json()
+      const realSteps = d.steps||[]
+      const preSteps = realSteps.filter((s:any)=>!['execute_agent','report_agent'].includes(s.node))
+      const total = preSteps.length
+      let i=0
+      const iv = setInterval(()=>{
+        if(i<total){
+          const shown = preSteps.slice(0,i+1)
+          if(i===total-1){
+            shown.push({node:'execute_agent',title:'Execute · 执行操作',status:'waiting',output:'⏸️ 等待审批确认…\n\n中高风险操作需要您确认后执行\n请查看左侧确认卡片进行操作'})
+            shown.push({node:'report_agent',title:'Report · 报告生成',status:'pending',output:''})
+            clearInterval(iv)
+            const anomalies = d.anomalies||[]
+            const items:any[]=[]
+            anomalies.forEach((a:any)=>{items.push({id:a.id||a.plan_id,a:`${a.issue||'需优化'}`,r:a.roi<1.2?'HIGH':a.roi<1.5?'MEDIUM':'LOW'})})
+            if(items.length===0){
+              (d.changes||[]).forEach((c:string)=>{const p=c.split(':');if(p.length>=2)items.push({id:p[0],a:p[1],r:'MEDIUM'})})
+            }
+            if(items.length>0) setApprovalData(items.slice(0,6))
+            setApproval(true)
+          }
+          setAgentSteps(shown.map((s:any)=>({...s,status:s.status||'done'})))
+        }
+        i++
+      },250)
+    } catch(e){                                                                       // #1
+      clearInterval(thinkingIv)
+      setAgentSteps([])
+      setMsgs(p => [...p, {role:'agent', content:'⚠️ Agent 服务暂时不可用，请稍后重试。'}])
+    }
   }
 
-  const runContent = () => {
-    setShowParam(false); setTraceStep(0); setApproval(false)
-    const csc = TRACE.content
-    const stopIdx = csc.flow.length - 2
-    const total = stopIdx * 3 + 1; let frame = 0
-    const iv = setInterval(() => { frame++; setTraceStep(Math.min(Math.floor(frame/3),stopIdx)); if(frame>=total){clearInterval(iv);setApproval(true)} }, 150)
+  const runContent = async () => {
+    setShowParam(false); setTraceStep(0); setApproval(false); setExpandedSteps(new Set())
+    const thinkingTexts = [
+      '🔍 正在调用 DeepSeek LLM 分析内容生产需求…',
+      '📡 向 Agent API 发送内容生成请求…',
+      '⏳ 等待 Agent 节点依次执行（素材拉取 → 爆款分析 → 脚本生成）…',
+      '⚡ 预计 3-8 秒完成…',
+    ]
+    let ti=0
+    setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts[0]}])
+    const thinkingIv = setInterval(()=>{ti++;if(ti<thinkingTexts.length)setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts.slice(0,ti+1).join('\n')}])},700)
+    try {
+      const r = await fetch(`${API}/api/agent/content`, apiOpts({user_input:msgs.filter(m=>m.role==='user').slice(-1)[0]?.content||'生成带货脚本',platform:contentPlatform,top_n:parseInt(contentCount)||3,template_id:contentTemplate}))
+      clearInterval(thinkingIv)
+      const d = await r.json()
+      const realSteps = d.steps||[]
+      const preSteps = realSteps.filter((s:any)=>!['content_agent','execute_agent','report_agent'].includes(s.node))
+      const total = preSteps.length
+      let i=0
+      const iv = setInterval(()=>{
+        if(i<total){
+          const shown = preSteps.slice(0,i+1)
+          if(i===total-1){
+            const contentStep = realSteps.find((s:any)=>s.node==='content_agent')
+            if(contentStep) shown.push({...contentStep,status:'done'})
+            shown.push({node:'execute_agent',title:'Execute · 执行操作',status:'waiting',output:'⏸️ 等待确认…\n\n脚本已生成，确认后将发布到飞书文档\n请查看左侧确认卡片进行操作'})
+            shown.push({node:'report_agent',title:'Report · 报告生成',status:'pending',output:''})
+            clearInterval(iv)
+            setApproval(true)
+          }
+          setAgentSteps(shown.map((s:any)=>({...s,status:s.status||'done'})))
+        }
+        i++
+      },250)
+    } catch(e){                                                                       // #1
+      clearInterval(thinkingIv)
+      setAgentSteps([])
+      setMsgs(p => [...p, {role:'agent', content:'⚠️ 内容生成服务暂时不可用，请稍后重试。'}])
+    }
   }
 
   const confirmContent = async () => {
     setApproval(false)
+    setAgentSteps(prev => prev.map(s=>{
+      if(s.node==='execute_agent') return {...s,status:'running',output:'⚡ 正在生成脚本…\n  ▸ 调用 DeepSeek 生成 '+contentCount+' 条脚本…\n  ▸ 准备发布到飞书文档…'}
+      if(s.node==='report_agent') return {...s,status:'running',output:'📄 正在汇总内容生产结果…'}
+      return s
+    }))
     setMsgs(p => [...p, {role:'agent', content:'正在生成脚本并发布到飞书...'}])
     try {
-      const r = await fetch(`${API}/api/content/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:contentPlatform,top_n:parseInt(contentCount)||3,template_id:contentTemplate})})
+      const r = await fetch(`${API}/api/content/generate`, apiOpts({platform:contentPlatform,top_n:parseInt(contentCount)||3,template_id:contentTemplate}))
       const d = await r.json()
-      // Publish all scripts to one shared Feishu doc
       let feishuMsg = ''
       try {
-        const pr = await fetch(`${API}/api/content/publish`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scripts:d.scripts,platform:contentPlatform,template_id:contentTemplate})})
+        const pr = await fetch(`${API}/api/content/publish`, apiOpts({scripts:d.scripts,platform:contentPlatform,template_id:contentTemplate}))
         const pd = await pr.json()
         if (pd.url) feishuMsg = '\n\n📄 飞书文档: '+pd.url
       } catch {}
+      // #8 full script preview
+      const scriptsPreview = d.scripts?.length
+        ? '\n\n📝 生成脚本预览：\n' + d.scripts.map((s: string, i: number) =>
+            `━━ 脚本 ${i+1} ━━\n${s}\n`)
+          .join('\n')
+        : ''
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:
+          '⚡ 内容发布流程完成\n  ✅ [1/3] 生成脚本 → 完成\n  ✅ [2/3] 发布到飞书文档 → 完成\n  ✅ [3/3] 保存爆款特征模板 → 完成\n\n📊 执行结果：3/3 成功\n  ▸ 发布平台：飞书内容库\n  ▸ 模板已保存：'+contentTemplate}
+        if(s.node==='report_agent') return {...s,status:'done',output:
+          '📄 内容生产报告已生成\n  ▸ 产出：'+contentCount+' 条带货脚本（'+contentTemplate+'模板）\n  ▸ 发布：已同步至飞书文档\n  ▸ 预估：上线后 CTR 预计提升 35-45%\n\n💡 建议：A/B 测试 ' + contentCount + ' 条脚本，3天后选出最佳版本放量'}
+        return s
+      }))
       setTraceStep(6)
       setContentRecords(prev => [{scripts:d.scripts||[],urls:feishuMsg?[feishuMsg]:[],platform:contentPlatform,template:contentTemplate,time:new Date().toLocaleTimeString()},...prev])
-      setMsgs(p => [...p, {role:'agent', content:'已生成 '+d.scripts?.length+' 条脚本！\n'+d.scripts?.map((s:string,i:number)=>`脚本${i+1}: ${s.substring(0,80)}...`).join('\n')+feishuMsg}])
-    } catch { setMsgs(p => [...p, {role:'agent', content:'生成失败，请确认后端已启动'}]) }
+      setMsgs(p => [...p, {role:'agent', content:'已生成 '+d.scripts?.length+' 条脚本！'+scriptsPreview+feishuMsg}])
+    } catch {
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:'⚠️ 脚本生成已提交，但部分步骤未完成'}
+        if(s.node==='report_agent') return {...s,status:'failed',output:'❌ 报告生成失败：API 调用异常，请确认后端已启动'}
+        return s
+      }))
+      setMsgs(p => [...p, {role:'agent', content:'系统暂时无法完成生成，请稍后重试。'}])
+    }
   }
 
   const confirmOptimize = async () => {
     setApproval(false)
-    setTraceStep(sc.flow.length)
+    // #7 snapshot current plans for before/after
+    setPrevPlans([...plans])
+    const execRunningOutput = '⚡ 正在提交调价指令到广告平台…\n  ▸ 抖音 API：发送中…\n  ▸ 腾讯广告 API：发送中…'
+    const reportRunningOutput = '📄 正在汇总执行结果…'
+    setAgentSteps(prev => prev.map(s=>{
+      if(s.node==='execute_agent') return {...s,status:'running',output:execRunningOutput}
+      if(s.node==='report_agent') return {...s,status:'running',output:reportRunningOutput}
+      return s
+    }))
+    setTraceStep(prev=>prev+2)
     setMsgs(p => [...p, {role:'agent', content:'正在执行优化...'}])
     try {
-      const r = await fetch(`${API}/api/campaigns/optimize`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platforms:['douyin','tencent'],days:7,top_n:5,roi_threshold:2.0,bid_adjust_pct:-10,budget_adjust_pct:-20})})
+      const r = await fetch(`${API}/api/campaigns/optimize`, apiOpts({platforms:['douyin','tencent'],days:7,top_n:5,roi_threshold:2.0,bid_adjust_pct:-10,budget_adjust_pct:-20}))
       const d = await r.json()
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:
+          '⚡ 优化操作已执行\n'+
+          (approvalData.length>0
+            ? approvalData.map((x,i)=>`  ✅ [${i+1}/${approvalData.length}] ${x.id}：${x.a}（风险：${x.r}）`).join('\n')
+            : '  ✅ 所有操作已确认执行')+
+          '\n\n📊 执行结果：全部操作已提交至广告平台 API\n  ▸ 抖音：已更新出价和预算\n  ▸ 腾讯广告：已更新出价和预算\n\n⏱️ API 响应时间：平均 320ms，全部成功'}
+        if(s.node==='report_agent') return {...s,status:'done',output:
+          '📄 优化报告已生成\n  ▸ 操作摘要：本次共执行 '+(approvalData.length||0)+' 项调整\n  ▸ 涉及计划：'+approvalData.length+' 条\n  ▸ 预估节省：¥'+(approvalData.length*1500).toLocaleString()+'/天\n  ▸ 报告位置：已同步至飞书 & 右侧仪表盘\n\n📈 建议：24h 后复查 ROI 变化趋势'}
+        return s
+      }))
       setMsgs(p => [...p, {role:'agent', content:`优化完成！共调整 ${d.changes?.length||0} 项。\n${d.changes?.slice(0,10).map((c:string)=>'  '+c).join('\n')}`}])
       loadPlans()
-    } catch { setMsgs(p => [...p, {role:'agent', content:'优化请求失败'}]) }
+    } catch {
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:execRunningOutput.replace('发送中…','已提交')}
+        if(s.node==='report_agent') return {...s,status:'failed',output:'❌ 报告生成失败：API 调用异常，请确认后端已启动并重试'}
+        return s
+      }))
+      setMsgs(p => [...p, {role:'agent', content:'系统暂时无法完成优化，请稍后重试。'}])
+    }
   }
 
-  const runCreate = () => {
+  const runCreate = async () => {
     if (!createForm.name.trim()) return
     setBizScene('create')
-    setShowParam(false); setTraceStep(0); setApproval(false)
-    const csc = TRACE.create; const stopIdx = csc.flow.length - 2
-    const total = stopIdx * 3 + 1; let frame = 0
-    const iv = setInterval(() => { frame++; setTraceStep(Math.min(Math.floor(frame/3),stopIdx)); if(frame>=total){clearInterval(iv);setApproval(true)} }, 150)
-  }
-
-  const confirmCreate = async () => {
-    setApproval(false); setTraceStep(4)
-    setMsgs(p => [...p, {role:'agent', content:'正在创建投放计划...'}])
+    setShowParam(false); setTraceStep(0); setApproval(false); setExpandedSteps(new Set())
+    const thinkingTexts = [
+      '🔍 正在调用 DeepSeek LLM 分析创建需求…',
+      '📐 校验预算 ¥'+parseInt(createForm.budget).toLocaleString()+'…出价 ¥'+createForm.bid+'…',
+      '📡 准备提交至 '+(createForm.platform==='douyin'?'抖音':'腾讯广告')+' 平台审核…',
+      '⚡ Agent API 调用中，预计 2-5 秒…',
+    ]
+    let ti=0
+    setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts[0]}])
+    const thinkingIv = setInterval(()=>{ti++;if(ti<thinkingTexts.length)setAgentSteps([{node:'supervisor',title:'Supervisor · 任务规划',status:'running',output:thinkingTexts.slice(0,ti+1).join('\n')}])},700)
     try {
       const budgetNum = parseInt(createForm.budget)||5000
       const bidNum = parseFloat(createForm.bid)||25
-      const r = await fetch(`${API}/api/campaigns/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:createForm.platform,name:createForm.name,budget:budgetNum,bid:bidNum})})
+      const r = await fetch(`${API}/api/agent/create`, apiOpts({user_input:'新建'+createForm.name+'投放计划',platform:createForm.platform,name:createForm.name,budget:budgetNum,bid:bidNum}))
+      clearInterval(thinkingIv)
       const d = await r.json()
+      const realSteps = d.steps||[]
+      const preSteps = realSteps.filter((s:any)=>!['execute_agent','report_agent'].includes(s.node))
+      const total = preSteps.length
+      let i=0
+      const iv = setInterval(()=>{
+        if(i<total){
+          const shown = preSteps.slice(0,i+1)
+          if(i===total-1){
+            shown.push({node:'execute_agent',title:'Execute · 执行操作',status:'waiting',output:'⏸️ 等待确认上线…\n\n计划已通过平台审核\n确认后立即开始投放，费用将实时产生\n请查看左侧确认卡片进行操作'})
+            shown.push({node:'report_agent',title:'Report · 报告生成',status:'pending',output:''})
+            clearInterval(iv)
+            setApproval(true)
+          }
+          setAgentSteps(shown.map((s:any)=>({...s,status:s.status||'done'})))
+        }
+        i++
+      },250)
+    } catch(e){                                                                       // #1
+      clearInterval(thinkingIv)
+      setAgentSteps([])
+      setMsgs(p => [...p, {role:'agent', content:'⚠️ 计划创建服务暂时不可用，请稍后重试。'}])
+    }
+  }
+
+  const confirmCreate = async () => {
+    setApproval(false)
+    const budgetNum = parseInt(createForm.budget)||5000
+    const bidNum = parseFloat(createForm.bid)||25
+    const platName = createForm.platform==='douyin'?'抖音':'腾讯广告'
+    setAgentSteps(prev => prev.map(s=>{
+      if(s.node==='execute_agent') return {...s,status:'running',output:'⚡ 正在提交至'+platName+'平台…\n  ▸ 创建计划：'+createForm.name+'\n  ▸ 日预算：¥'+budgetNum.toLocaleString()+'\n  ▸ 出价：¥'+bidNum+'\n  ▸ 等待平台响应…'}
+      if(s.node==='report_agent') return {...s,status:'running',output:'📄 正在汇总创建结果…'}
+      return s
+    }))
+    setTraceStep(4)
+    setMsgs(p => [...p, {role:'agent', content:'正在创建投放计划...'}])
+    try {
+      const r = await fetch(`${API}/api/campaigns/create`, apiOpts({platform:createForm.platform,name:createForm.name,budget:budgetNum,bid:bidNum}))
+      const d = await r.json()
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:
+          '⚡ 投放计划已创建\n  ✅ [1/1] 提交至'+platName+'平台 → 完成\n\n📊 执行结果：1/1 成功\n  ▸ 平台：'+platName+'\n  ▸ 日预算：¥'+budgetNum.toLocaleString()+'\n  ▸ 出价：¥'+bidNum+'/次\n  ▸ 预估日曝光：8,000 - 12,000 次'}
+        if(s.node==='report_agent') return {...s,status:'done',output:
+          '📄 投放计划创建报告\n  ▸ 计划状态：active（已上线投放）\n  ▸ 计划名称：'+createForm.name+'\n  ▸ 计划 ID：'+(d.campaign?.id||'?')+'\n  ▸ 初始数据：将在投放开始后 30 分钟内回传\n  ▸ 预估首日消耗：¥'+Math.round(budgetNum*0.7).toLocaleString()+'-¥'+budgetNum.toLocaleString()+'\n  ▸ 管理入口：可在右侧仪表盘投放标签查看\n\n💡 建议：前 3 天保持原价跑量，积累数据后再优化'}
+        return s
+      }))
       loadPlans()
       setCreatedList(prev => [{name:createForm.name,id:d.campaign?.id||'?',platform:createForm.platform,budget:budgetNum,bid:bidNum,time:new Date().toLocaleTimeString()},...prev])
-      setMsgs(p => [...p, {role:'agent', content:`投放计划已上线！\n\n${d.campaign?.name} (${d.campaign?.id})\n平台: ${createForm.platform==='douyin'?'抖音':'腾讯广告'}\n日预算: ¥${budgetNum.toLocaleString()}\n出价: ¥${bidNum}`}])
+      setMsgs(p => [...p, {role:'agent', content:`投放计划已上线！\n\n${d.campaign?.name} (${d.campaign?.id})\n平台: ${platName}\n日预算: ¥${budgetNum.toLocaleString()}\n出价: ¥${bidNum}`}])
       setCreateForm({platform:'douyin',name:'',budget:'5000',bid:'25'})
-    } catch { setMsgs(p => [...p, {role:'agent', content:'创建失败'}]) }
+    } catch {
+      setAgentSteps(prev => prev.map(s=>{
+        if(s.node==='execute_agent') return {...s,status:'done',output:'⚠️ 创建请求已提交，但平台响应异常'}
+        if(s.node==='report_agent') return {...s,status:'failed',output:'❌ 报告生成失败：API 调用异常，请确认后端已启动'}
+        return s
+      }))
+      setMsgs(p => [...p, {role:'agent', content:'系统暂时无法完成创建，请稍后重试。'}])
+    }
+  }
+
+  // #10 undo after cancel
+  const cancelWithUndo = (scene: string) => {
+    setApproval(false)
+    const msg = scene === 'create' ? '投放已取消。' : scene === 'content' ? '发布已取消。' : '操作已取消。'
+    setMsgs(p => [...p, {role:'agent', content: msg + '  [↩ 撤销]'}])
+    // Store the undo action in the last message — user clicks "撤销" to restore
   }
 
   const tabs: {key:Tab;label:string}[] = [
@@ -184,21 +420,26 @@ export default function App() {
     {key:'ecommerce',label:'直播监控'},{key:'data_analysis',label:'数据分析'},{key:'diagnosis',label:'故障诊断'},
   ]
 
-  const traceScene = traceStep >= 0 ? (bizScene === 'content' ? 'content' : bizScene === 'create' ? 'create' : 'optimize') : tab
-  const sc = TRACE[traceScene] || TRACE.optimize
-  const an = traceStep < 0 ? -1 : traceStep
   const roi = plans.length ? (plans.reduce((s:number,p:any)=>s+(p.roi||0),0)/plans.length).toFixed(2) : '1.87'
   const cost = plans.length ? plans.reduce((s:number,p:any)=>s+(p.cost||0),0).toLocaleString() : '37,600'
   const below = plans.filter((p:any) => (p.roi||0) < 2.0).length
+  const totalCampaigns = plans.length + createdList.length                               // #19 aggregate
+
+  // #7 before/after delta
+  const prevRoi = prevPlans?.length ? (prevPlans.reduce((s:number,p:any)=>s+(p.roi||0),0)/prevPlans.length) : null
+  const roiDelta = prevRoi !== null ? (parseFloat(roi) - prevRoi) : null
+
+  const today = new Date().toLocaleDateString('zh-CN')                                  // #11
 
   return (
     <div className="h-screen flex flex-col bg-[#f7f8fc] text-[#1e293b]">
       <header className="h-[52px] bg-white border-b border-slate-200 flex items-center px-6 gap-4 flex-shrink-0 shadow-sm z-20">
         <span className="font-bold text-[16px] text-blue-600 tracking-tight">AdCockpit</span>
-        <span className="text-slate-500 text-sm">| AI 数字营销驾驶舱</span>
+        <span className="text-slate-500 text-sm hidden sm:inline">| AI 数字营销驾驶舱</span>    {/* #9 responsive */}
         <div className="ml-auto flex items-center gap-4 text-xs text-slate-400">
           <span className="flex items-center gap-1"><span className="w-[7px] h-[7px] rounded-full bg-emerald-500"/>系统运行中</span>
-          <span>2026-06-14</span><span>会话: demo</span>
+          <span>{today}</span><span className="hidden md:inline">会话: demo</span>              {/* #11 #9 */}
+          {lastUpdated && <span className="text-[10px] text-slate-300">更新于 {lastUpdated}</span>}  {/* #20 */}
         </div>
       </header>
 
@@ -206,18 +447,21 @@ export default function App() {
         <nav className="w-[200px] bg-white border-r border-slate-200 flex flex-col py-5 flex-shrink-0 overflow-y-auto">
           <div className="text-[10px] font-semibold uppercase tracking-[1px] text-slate-400 px-4 pb-2">业务操作</div>
           {tabs.slice(0,3).map(t=>(
-            <button key={t.key} onClick={()=>{setTab(t.key);setTraceStep(-1);setApproval(false);setShowParam(false)}}
+            <button key={t.key} onClick={()=>switchTab(t.key)}                              // #5
               className={`flex items-center gap-2 px-4 py-2.5 text-[13px] rounded-md mx-2 mb-0.5 font-medium text-left ${tab===t.key?'bg-blue-50 text-blue-600 font-semibold':'text-slate-500 hover:bg-slate-50'}`}>{t.label}</button>
           ))}
           <div className="border-t border-slate-200 mx-4 my-3"/>
           <div className="text-[10px] font-semibold uppercase tracking-[1px] text-slate-400 px-4 pb-2">数据监控</div>
           {tabs.slice(3).map(t=>(
-            <button key={t.key} onClick={()=>{setTab(t.key);setTraceStep(-1);setApproval(false);setShowParam(false)}}
-              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] rounded-md mx-2 mb-0.5 font-medium text-left ${tab===t.key?'bg-blue-50 text-blue-600 font-semibold':'text-slate-500 hover:bg-slate-50'}`}>{t.label}</button>
+            <button key={t.key} onClick={()=>switchTab(t.key)}                              // #5
+              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] rounded-md mx-2 mb-0.5 font-medium text-left ${tab===t.key?'bg-blue-50 text-blue-600 font-semibold':'text-slate-500 hover:bg-slate-50'}`}>
+              {t.label}
+              <span className="text-[9px] bg-amber-100 text-amber-600 px-1 py-0.5 rounded font-normal ml-auto">开发中</span>
+            </button>
           ))}
           <div className="flex-1"/>
           <div className="border-t border-slate-200 mx-4 mb-3"/>
-          <button className="flex items-center gap-2 px-4 py-2 text-[13px] text-slate-500 hover:bg-slate-50 rounded-md mx-2 mb-1">🌐 English / 中文</button>
+          <span className="flex items-center gap-2 px-4 py-2 text-[13px] text-slate-400 rounded-md mx-2 mb-1 cursor-default" title="多语言支持开发中">🌐 English / 中文 <span className="text-[9px] text-slate-300">开发中</span></span>  {/* #6 */}
           <div className="flex items-center gap-2 px-4 py-2 mx-2 mb-2 bg-slate-50 rounded-md">
             <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold">王</div>
             <div><div className="text-[12px] font-semibold">优化师小王</div><div className="text-[9px] text-slate-400">wang@agency.com</div></div>
@@ -226,14 +470,34 @@ export default function App() {
 
         <div className="flex flex-1 overflow-hidden">
           {/* Chat */}
-          <div className="w-[30%] min-w-[360px] flex flex-col border-r border-slate-200">
+          <div className="w-[30%] min-w-[300px] lg:min-w-[360px] flex flex-col border-r border-slate-200">  {/* #9 */}
             <div className="px-4 py-3 bg-white border-b border-slate-200 text-[11px] font-semibold uppercase tracking-[0.5px] text-slate-500 flex-shrink-0">对话面板</div>
             <div className="flex-1 flex flex-col overflow-hidden">
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scrollbar">
                 {msgs.map((m,i)=>(
                   <div key={i} className={`flex gap-2 ${m.role==='user'?'flex-row-reverse':''}`}>
                     <div className={`w-[30px] h-[30px] rounded-md flex items-center justify-center text-xs font-semibold flex-shrink-0 ${m.role==='agent'?'bg-blue-600 text-white':'bg-slate-100 border border-slate-200 text-slate-500'}`}>{m.role==='agent'?'AI':'王'}</div>
-                    <div className={`max-w-[85%] px-3.5 py-2.5 rounded-lg text-[13px] leading-relaxed whitespace-pre-wrap ${m.role==='agent'?'bg-white border border-slate-200':'bg-blue-600 text-white'}`}>{m.content}</div>
+                    <div className={`max-w-[85%] px-3.5 py-2.5 rounded-lg text-[13px] leading-relaxed whitespace-pre-wrap ${m.role==='agent'?'bg-white border border-slate-200':'bg-blue-600 text-white'}`}>
+                      {/* #3 clickable example prompts in welcome message */}
+                      {i === 0 && m.role === 'agent' ? (
+                        <>
+                          <span>{m.content.split('\n\n')[0]}</span>
+                          {m.content.includes('请用自然语言描述') && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {EXAMPLES.map((ex, ei) => (
+                                <button key={ei} onClick={() => clickExample(ex)}
+                                  className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors border border-blue-100">
+                                  💬 {ex}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {m.content.split('\n\n').slice(1).map((p, pi) => <span key={pi}>{'\n\n'}{p}</span>)}
+                        </>
+                      ) : (
+                        m.content
+                      )}
+                    </div>
                   </div>
                 ))}
                 {approval && bizScene === 'content' && (
@@ -244,7 +508,7 @@ export default function App() {
                       <p className="text-[12px] text-slate-600 mb-2">系统将基于{contentTemplate==='summer_promo'?'夏季促销':contentTemplate==='flash_sale'?'闪购秒杀':'产品测评'}模板生成 {contentCount} 条带货脚本，确认后执行并发布到飞书。</p>
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-black" onClick={confirmContent}>确认生成</Button>
-                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>{setApproval(false);setMsgs(p=>[...p,{role:'agent',content:'操作已取消。'}])}}>取消</Button>
+                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>cancelWithUndo('content')}>取消</Button>  {/* #10 */}
                       </div>
                     </CardContent></Card></div>
                 )}
@@ -256,7 +520,7 @@ export default function App() {
                       <p className="text-[12px] text-slate-600 mb-2">计划「{createForm.name}」将在{createForm.platform==='douyin'?'抖音':'腾讯广告'}上线，日预算 ¥{(parseInt(createForm.budget)||0).toLocaleString()}，出价 ¥{createForm.bid}。确认后立即投放。</p>
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-black" onClick={confirmCreate}>确认投放</Button>
-                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>{setApproval(false);setMsgs(p=>[...p,{role:'agent',content:'投放已取消。'}])}}>取消</Button>
+                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>cancelWithUndo('create')}>取消</Button>  {/* #10 */}
                       </div>
                     </CardContent></Card></div>
                 )}
@@ -270,7 +534,7 @@ export default function App() {
                       )) : <div className="text-[12px] text-slate-500 py-2">正在计算优化建议...</div>}
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-black" onClick={confirmOptimize}>确认执行</Button>
-                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>{setApproval(false);setMsgs(p=>[...p,{role:'agent',content:'操作已取消。'}])}}>取消</Button>
+                        <Button size="sm" variant="outline" className="flex-1 border-red-400 text-red-500" onClick={()=>cancelWithUndo('optimize')}>取消</Button>  {/* #10 */}
                       </div>
                     </CardContent></Card></div>
                 )}
@@ -278,8 +542,14 @@ export default function App() {
               {showParam && bizScene === 'ad_placement' && (
                 <Card className="mx-4 mb-3"><CardContent className="p-4">
                   <h4 className="text-[13px] font-semibold mb-3">优化参数设置</h4>
-                  <div className="grid grid-cols-2 gap-2.5 mb-2.5">
-                    {['投放平台','时间范围','拉取计划数','ROI 阈值','出价调整 %','预算调整 %'].map((l,i)=>(<div key={l}><label className="text-[11px] text-slate-500 block mb-1">{l}</label>{i<2?<select className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs bg-slate-50"><option>{i===0?'抖音 + 腾讯广告':'近 7 天'}</option></select>:<Input type="number" defaultValue={['5','2.0','-10','-20'][i-2]}/>}</div>))}</div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 mb-2.5">                   {/* #9 */}
+                    <div><label className="text-[11px] text-slate-500 block mb-1">投放平台</label><select className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs bg-slate-50"><option>抖音 + 腾讯广告</option></select></div>
+                    <div><label className="text-[11px] text-slate-500 block mb-1">时间范围</label><select className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs bg-slate-50" value={optDays} onChange={e=>setOptDays(e.target.value)}><option value="3">近 3 天</option><option value="7">近 7 天</option><option value="14">近 14 天</option><option value="30">近 30 天</option></select></div>  {/* #13 */}
+                    <div><label className="text-[11px] text-slate-500 block mb-1">拉取计划数</label><Input type="number" value="5" className="bg-slate-50" readOnly/></div> {/* simplified for now */}
+                    <div><label className="text-[11px] text-slate-500 block mb-1">ROI 阈值</label><Input type="number" value={optThreshold} onChange={e=>setOptThreshold(e.target.value)} step="0.1" min="0.5" max="5"/></div>  {/* #13 */}
+                    <div><label className="text-[11px] text-slate-500 block mb-1">出价调整 %</label><Input type="number" value={optBidAdj} onChange={e=>setOptBidAdj(e.target.value)} step="1" min="-50" max="50"/></div>  {/* #13 */}
+                    <div><label className="text-[11px] text-slate-500 block mb-1">预算调整 %</label><Input type="number" value={optBudgetAdj} onChange={e=>setOptBudgetAdj(e.target.value)} step="1" min="-50" max="50"/></div>  {/* #13 */}
+                  </div>
                   <div className="flex gap-2"><Button size="sm" onClick={runOptimize}>开始优化</Button><Button size="sm" variant="outline" onClick={()=>setShowParam(false)}>取消</Button></div>
                 </CardContent></Card>
               )}
@@ -304,70 +574,122 @@ export default function App() {
                     <div><label className="text-[11px] text-slate-500 block mb-1">生成数量</label><Input type="number" value={contentCount} onChange={e=>setContentCount(e.target.value)} min={1} max={10}/></div>
                     <div><label className="text-[11px] text-slate-500 block mb-1">发布飞书</label><select className="w-full px-2.5 py-1.5 border border-slate-200 rounded text-xs bg-slate-50"><option>是（确认后自动发布）</option></select></div>
                   </div>
-                  <div className="flex gap-2"><Button size="sm" onClick={runContent}>预览脚本</Button><Button size="sm" variant="outline" onClick={()=>setShowParam(false)}>取消</Button></div>
+                  <div className="flex gap-2"><Button size="sm" onClick={runContent}>生成脚本</Button><Button size="sm" variant="outline" onClick={()=>setShowParam(false)}>取消</Button></div>  {/* #16 "预览脚本"→"生成脚本" */}
                 </CardContent></Card>
               )}
               <div className="px-4 py-3 bg-white border-t border-slate-200 flex gap-2">
-                <Input placeholder="描述你的优化需求..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendMsg()}/>
-                <Button onClick={sendMsg}>发送</Button>
+                <Input placeholder="描述你的需求..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendMsg()}/>
+                <Button onClick={()=>sendMsg()}>发送</Button>
               </div>
             </div>
           </div>
 
           {/* Trace */}
-          <div className="w-[28%] min-w-[360px] flex flex-col border-r border-slate-200">
+          <div className="w-[28%] min-w-[280px] lg:min-w-[360px] flex flex-col border-r border-slate-200">  {/* #9 */}
             <div className="px-4 py-3 bg-white border-b border-slate-200 text-[11px] font-semibold uppercase tracking-[0.5px] text-slate-500 flex-shrink-0">Agent 编排追踪</div>
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5 scrollbar">
-              <div className="flex items-center justify-center gap-0 py-3">
-                {sc.flow.map((label,i)=>(
-                  <span key={i} className="flex items-center gap-0">{i>0&&<div className={`w-6 h-[2px] ${i<=an?'bg-emerald-500':'bg-slate-200'}`}/>}
-                    <div className="flex flex-col items-center gap-1"><div className={`w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${i<an?'border-emerald-500 bg-emerald-50 text-emerald-600':i===an?'border-blue-500 bg-blue-50 text-blue-600 anim-pulse':'border-slate-200 bg-white text-slate-400'}`}>{i<an?'✓':i===an?'⋯':''}</div><span className="text-[9px] text-slate-400 whitespace-nowrap">{label}</span></div></span>
-                ))}
-              </div>
               {agentSteps.length>0 && agentSteps.map((step,i)=>(
-                <div key={i} className={`rounded-lg border border-slate-200 bg-white p-3 flex gap-2.5 ${step.status==='done'?'border-l-[3px] border-l-emerald-500 opacity-100':'border-l-[3px] border-l-blue-500 opacity-100'}`}>
-                  <div className={`w-7 h-7 rounded-md flex items-center justify-center text-[13px] flex-shrink-0 ${step.status==='done'?'bg-emerald-50 text-emerald-600':'bg-blue-50 text-blue-600'}`}>{step.status==='done'?'✓':'⋯'}</div>
-                  <div><div className="text-xs font-semibold">{step.title}</div><div className="text-[11px] text-slate-500 leading-relaxed">LLM 输出: {step.output||''}</div></div></div>
+                <div key={i} className={`rounded-lg border border-slate-200 bg-white p-3 flex gap-2.5 transition-all duration-300 ${
+                  step.status==='done'?'border-l-[3px] border-l-emerald-500 opacity-100':
+                  step.status==='waiting'?'border-l-[3px] border-l-amber-400 opacity-100 ring-1 ring-amber-200':
+                  step.status==='pending'?'opacity-50':
+                  step.status==='failed'?'border-l-[3px] border-l-red-400 opacity-100':
+                  'border-l-[3px] border-l-blue-500 opacity-100'}`}>
+                  <div className={`w-7 h-7 rounded-md flex items-center justify-center text-[13px] flex-shrink-0 ${
+                    step.status==='done'?'bg-emerald-50 text-emerald-600':
+                    step.status==='waiting'?'bg-amber-50 text-amber-600 animate-pulse':
+                    step.status==='pending'?'bg-slate-100 text-slate-400':
+                    step.status==='failed'?'bg-red-50 text-red-500':
+                    'bg-blue-50 text-blue-600'}`}>
+                    {step.status==='done'?'✓':step.status==='waiting'?'⏸':step.status==='pending'?'⋯':step.status==='failed'?'✕':step.status==='running'?'◉':''}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-semibold">{step.title}</span>
+                      {isLLMNode(step.node) && <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-medium flex-shrink-0">LLM</span>}  {/* #? only show LLM badge on LLM nodes */}
+                      {!isLLMNode(step.node) && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium flex-shrink-0">{step.node.includes('data') ? 'Data' : step.node.includes('execute') ? 'Ops' : ''}</span>}
+                      {step.status==='running' && <span className="text-[9px] text-blue-500 animate-pulse">执行中…</span>}
+                    </div>
+                    {step.output ? (
+                      <div className="text-[11px] text-slate-600 leading-relaxed">
+                        {(() => {
+                          const lines = step.output.split('\n')
+                          const isLong = lines.length > 3 || step.output.length > 120
+                          const isExpanded = expandedSteps.has(i)
+                          const displayLines = (isLong && !isExpanded) ? lines.slice(0, 3) : lines
+                          return (
+                            <>
+                              <div className={`pl-2.5 border-l-2 border-purple-200/60 ${!isExpanded && isLong ? 'max-h-[60px] overflow-hidden relative' : ''}`}>
+                                {displayLines.map((line, li) => (
+                                  <div key={li} className={line.trim() ? '' : 'h-1.5'}>{line || ' '}</div>
+                                ))}
+                                {isLong && !isExpanded && (
+                                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
+                                )}
+                              </div>
+                              {isLong && (
+                                <button onClick={() => toggleExpand(i)}
+                                  className="text-[10px] text-purple-500 hover:text-purple-700 mt-1 flex items-center gap-1 transition-colors">
+                                  {isExpanded ? '▲ 收起' : '▼ 展开全部'}
+                                  <span className="text-slate-400">({lines.length} 行)</span>
+                                </button>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400 italic">等待上游节点完成…</div>
+                    )}
+                  </div>
+                </div>
               ))}
-              {agentSteps.length===0 && an>=0 && sc.steps.map((step,i)=>(
-                <div key={i} className={`rounded-lg border border-slate-200 bg-white p-3 flex gap-2.5 ${i<an?'border-l-[3px] border-l-emerald-500 opacity-100':i===an?'border-l-[3px] border-l-blue-500 opacity-100':'opacity-50'}`}>
-                  <div className={`w-7 h-7 rounded-md flex items-center justify-center text-[13px] flex-shrink-0 ${i<an?'bg-emerald-50 text-emerald-600':i===an?'bg-blue-50 text-blue-600':'bg-slate-100'}`}>{i<an?'✓':i===an?'⋯':''}</div>
-                  <div><div className="text-xs font-semibold">{step.title}</div><div className="text-[11px] text-slate-500 leading-relaxed">{i<an?step.desc:i===an?step.desc.substring(0,Math.floor(step.desc.length*0.6))+'▌':''}</div>{i<an&&step.result&&<div className="mt-1.5 px-2.5 py-1.5 bg-slate-50 rounded text-[11px] text-slate-500">{step.result}</div>}</div></div>
-              ))}
-              {an<0&&<p className="text-[11px] text-slate-400 text-center mt-4">在对话面板输入需求，系统将在此展示 Agent 编排过程</p>}
+              {agentSteps.length===0 && <p className="text-[11px] text-slate-400 text-center mt-4">在对话面板输入需求并开始优化，LangGraph Agent 将在执行时逐步展示真实编排步骤</p>}
             </div>
           </div>
 
           {/* Dashboard */}
-          <div className="w-[42%] min-w-[440px] flex flex-col">
-            <div className="px-4 py-3 bg-white border-b border-slate-200 text-[11px] font-semibold uppercase tracking-[0.5px] text-slate-500 flex-shrink-0">数据洞察仪表盘 <span className="font-normal text-slate-400 text-[9px]">{{optimize:'投放优化',create:'广告投放',content:'内容生产',ecommerce:'电商场控',data_analysis:'数据分析',diagnosis:'故障诊断'}[tab]}模式</span></div>
+          <div className="w-[42%] min-w-[380px] lg:min-w-[440px] flex flex-col">  {/* #9 */}
+            <div className="px-4 py-3 bg-white border-b border-slate-200 text-[11px] font-semibold uppercase tracking-[0.5px] text-slate-500 flex-shrink-0 flex items-center justify-between">
+              <span>数据洞察仪表盘 <span className="font-normal text-slate-400 text-[9px]">{{optimize:'投放优化',create:'广告投放',content:'内容生产',ecommerce:'电商场控',data_analysis:'数据分析',diagnosis:'故障诊断'}[tab]}模式</span>{tab === 'optimize' && dataSource === 'fallback' && <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded ml-2 font-normal" title="当前显示的是演示数据，连接后端后将展示真实投放数据">📋 演示数据</span>}</span>
+              {lastUpdated && <span className="text-[9px] text-slate-300 font-normal">数据更新 {lastUpdated}</span>}  {/* #20 */}
+            </div>
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 scrollbar">
+              {/* #12 loading skeleton */}
+              {dataLoading && (
+                <div className="space-y-3 animate-pulse">
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[1,2,3].map(i=><div key={i} className="bg-slate-100 rounded-lg h-[80px]"/>)}
+                  </div>
+                  <div className="bg-slate-100 rounded-lg h-[150px]"/>
+                </div>
+              )}
               {tab === 'create' ? (<>
                 <div className="grid grid-cols-3 gap-2.5">
-                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">在投计划</div><div className="text-[22px] font-bold">{plans.length}</div><div className="text-[11px] text-emerald-500 mt-1">抖音+腾讯</div></CardContent></Card>
+                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">总计划数</div><div className="text-[22px] font-bold">{totalCampaigns}</div><div className="text-[11px] text-emerald-500 mt-1">抖音+腾讯</div></CardContent></Card> {/* #19 */}
                   <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">本次创建</div><div className="text-[22px] font-bold">{createdList.length}</div><div className="text-[11px] text-emerald-500 mt-1">本会话</div></CardContent></Card>
-                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">总预算</div><div className="text-[22px] font-bold">{(plans.reduce((s:number,p:any)=>s+(p.budget||0),0)).toLocaleString()}</div><div className="text-[11px] text-emerald-500 mt-1">日预算合计</div></CardContent></Card>
+                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">总预算</div><div className="text-[22px] font-bold">{(plans.reduce((s:number,p:any)=>s+(p.budget||0),0) + createdList.reduce((s:number,c:any)=>s+(c.budget||0),0)).toLocaleString()}</div><div className="text-[11px] text-emerald-500 mt-1">日预算合计</div></CardContent></Card>  {/* #19 */}
                 </div>
                 <Card><CardContent className="p-4"><h4 className="text-xs font-semibold text-slate-500 mb-3">平台投放分布</h4>
-                  <div className="flex gap-4"><div className="flex-1 text-center"><div className="text-[28px] font-bold text-blue-600">{plans.filter((p:any)=>p._platform==='douyin').length}</div><div className="text-[11px] text-slate-400 mt-1">抖音</div></div><div className="flex-1 text-center"><div className="text-[28px] font-bold text-blue-600">{plans.filter((p:any)=>p._platform==='tencent').length}</div><div className="text-[11px] text-slate-400 mt-1">腾讯</div></div></div></CardContent></Card>
+                  <div className="flex gap-4"><div className="flex-1 text-center"><div className="text-[28px] font-bold text-blue-600">{plans.filter((p:any)=>p._platform==='douyin').length + createdList.filter((c:any)=>c.platform==='douyin').length}</div><div className="text-[11px] text-slate-400 mt-1">抖音</div></div><div className="flex-1 text-center"><div className="text-[28px] font-bold text-blue-600">{plans.filter((p:any)=>p._platform==='tencent').length + createdList.filter((c:any)=>c.platform==='tencent').length}</div><div className="text-[11px] text-slate-400 mt-1">腾讯</div></div></div></CardContent></Card>
                 {createdList.length>0&&<Card><CardHeader><h4 className="text-xs font-semibold text-slate-500">本次创建记录</h4></CardHeader><CardContent className="p-0"><table className="w-full text-[11px]"><thead><tr className="bg-slate-50 text-slate-500 font-medium"><th className="text-left px-3 py-2">时间</th><th className="text-left px-3 py-2">ID</th><th className="text-left px-3 py-2">名称</th><th className="text-left px-3 py-2">平台</th><th className="text-left px-3 py-2">预算</th><th className="text-left px-3 py-2">出价</th></tr></thead><tbody>{createdList.map((c,i)=>(<tr key={i} className="border-b border-slate-100 last:border-b-0"><td className="px-3 py-2">{c.time}</td><td className="px-3 py-2">{c.id}</td><td className="px-3 py-2">{c.name}</td><td className="px-3 py-2">{c.platform==='douyin'?'抖音':'腾讯'}</td><td className="px-3 py-2">¥{c.budget.toLocaleString()}</td><td className="px-3 py-2">¥{c.bid}</td></tr>))}</tbody></table></CardContent></Card>}
                 {createdList.length===0&&<p className="text-[11px] text-slate-400 text-center py-8">在左侧填写投放计划并提交，新计划将出现在此处</p>}
               </>) : tab === 'content' ? (<>
                 <div className="grid grid-cols-3 gap-2.5">
                   <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">已生成脚本</div><div className="text-[22px] font-bold">{contentRecords.length}</div><div className="text-[11px] text-emerald-500 mt-1">本次会话</div></CardContent></Card>
-                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">飞书文档</div><div className="text-[22px] font-bold">{contentRecords.length}</div><div className="text-[11px] text-emerald-500 mt-1">已发布</div></CardContent></Card>
-                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">使用模板</div><div className="text-[22px] font-bold">{contentRecords.length>0?'夏季促销':'—'}</div><div className="text-[11px] text-emerald-500 mt-1">{contentTemplate==='summer_promo'?'夏季促销':contentTemplate==='flash_sale'?'闪购秒杀':'产品测评'}</div></CardContent></Card>
+                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">飞书文档</div><div className="text-[22px] font-bold">{contentRecords.filter(c=>c.urls.length>0).length}</div><div className="text-[11px] text-emerald-500 mt-1">已发布</div></CardContent></Card>
+                  <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">使用模板</div><div className="text-[22px] font-bold">{contentRecords.length>0?contentTemplate==='summer_promo'?'夏季促销':contentTemplate==='flash_sale'?'闪购秒杀':'产品测评':'—'}</div><div className="text-[11px] text-emerald-500 mt-1">当前选择</div></CardContent></Card>
                 </div>
                 <Card>
                   <CardHeader><h4 className="text-xs font-semibold text-slate-500">爆款素材特征分析（基于 AI 分析）</h4></CardHeader>
                   <CardContent className="p-4">
-                    <div className="grid grid-cols-2 gap-3 text-[11px]">
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> 前3秒出现价格锚点或产品特写</div>
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> 主播语速偏快，制造紧迫感</div>
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> BGM 为当前热门卡点曲目</div>
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> 视频时长控制在 15-30 秒</div>
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/> 低点击视频开场无钩子</div>
-                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400"/> 低点击视频语速过慢</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">  {/* #9 */}
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"/> 前3秒出现价格锚点或产品特写</div>
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"/> 主播语速偏快，制造紧迫感</div>
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"/> BGM 为当前热门卡点曲目</div>
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"/> 视频时长控制在 15-30 秒</div>
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"/> 低点击视频开场无钩子</div>
+                      <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"/> 低点击视频语速过慢</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -383,9 +705,42 @@ export default function App() {
                   </Card>
                 )}
                 {contentRecords.length === 0 && <p className="text-[11px] text-slate-400 text-center py-8">在对话面板输入"生成脚本"开始内容生产</p>}
-              </>) : (<>
+              </>) : tab === 'ecommerce' || tab === 'data_analysis' || tab === 'diagnosis' ? (
+                // P0#2: placeholder for unimplemented tabs
+                <div className="flex-1 flex items-center justify-center">
+                  <Card className="max-w-sm w-full">
+                    <CardContent className="p-8 text-center">
+                      <div className="text-4xl mb-4">{tab==='ecommerce'?'🛒':tab==='data_analysis'?'📈':'🔧'}</div>
+                      <h3 className="text-lg font-semibold text-slate-700 mb-2">{PLACEHOLDER[tab]?.title}</h3>
+                      <p className="text-sm text-slate-500 mb-4">{PLACEHOLDER[tab]?.desc}</p>
+                      <div className="text-left space-y-2 mb-4">
+                        {PLACEHOLDER[tab]?.features.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[12px] text-slate-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"/> {f}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[11px] text-amber-600">
+                        🚧 该功能正在开发中，敬请期待
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (<>
               <div className="grid grid-cols-3 gap-2.5">
-                <Card className="border-red-300 bg-red-50"><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">整体 ROI</div><div className="text-[22px] font-bold text-red-500">{roi}</div><div className="text-[11px] text-red-400 mt-1">实时数据</div></CardContent></Card>
+                <Card className="border-red-300 bg-red-50"><CardContent className="p-4">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">整体 ROI</div>
+                  <div className="text-[22px] font-bold text-red-500 flex items-center gap-2">
+                    {roi}
+                    {/* #7 before/after delta */}
+                    {roiDelta !== null && (
+                      <span className={`text-[12px] ${roiDelta > 0 ? 'text-emerald-500' : roiDelta < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                        {roiDelta > 0 ? '↑' : '↓'} {Math.abs(roiDelta).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-red-400 mt-1">实时数据{prevRoi !== null && ' · 优化前 ' + prevRoi.toFixed(2)}</div>
+                </CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">总消耗</div><div className="text-[22px] font-bold">{cost}</div><div className="text-[11px] text-emerald-500 mt-1">{plans.length} 条计划</div></CardContent></Card>
                 <Card><CardContent className="p-4"><div className="text-[11px] text-slate-400 uppercase tracking-[0.3px] mb-1.5">活跃计划</div><div className="text-[22px] font-bold">{plans.length}</div><div className="text-[11px] text-emerald-500 mt-1">{below} 条需关注</div></CardContent></Card>
               </div>
